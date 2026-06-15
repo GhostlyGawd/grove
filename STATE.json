@@ -15,18 +15,18 @@
     }
   },
   "host_os": "windows",
-  "current_phase": 0,
+  "current_phase": 1,
   "phase_status": {
-    "0_recon_architecture": "in_progress",
-    "1_brand_design": "not_started",
+    "0_recon_architecture": "done (v0.1.0; CI run 27519073829; Critic 11/0 PASS)",
+    "1_brand_design": "in_progress",
     "2_host_engine": "not_started",
     "3_desktop_client": "not_started",
     "4_mobile_client": "not_started",
     "5_platform_setup": "not_started",
     "6_hardening_launch": "not_started"
   },
-  "version": "0.0.0",
-  "next_release_target": "0.1.0",
+  "version": "0.1.0",
+  "next_release_target": "0.2.0",
   "toolchain": {
     "git": "2.53.0", "gh": "2.89.0 (authed: GhostlyGawd)", "node": "24.14.1",
     "npm": "11.11.0", "bun": "installed", "pnpm": "installed",
@@ -49,10 +49,13 @@
     "tunnel": "cloudflared / localtunnel (OSS) — Phase 5"
   },
   "next_actions": [
-    "Phase 0 recon subagent: study original Superset repo, write docs/architecture.md + docs/recon.md",
-    "Create GitHub private repo + initial commit",
-    "Create Linear project + milestones + parity issues",
-    "Scaffold Turborepo skeleton (compiles, CI matrix green) -> cut v0.1.0"
+    "Phase 1: Brand & Design Director -> docs/brand/ (name, story, identity) + docs/design-system.md (thesis, type scale, color, spacing/radii/elevation, motion, reduced-motion) + tokens + primitive component lib; must pass §6.3 anti-slop design gate (Critic) before any feature UI",
+    "Phase 1 Critic gate, then cut v0.2.0",
+    "Then Phase 2: Host Engine (node-pty validation gate first per ADR-0007)"
+  ],
+  "critic_followups_for_phase2": [
+    "packages/api AppRouter implements 6 of 13 routers from architecture §3.1 — add sessions/presets/ports/notifications/settings/host/auth; complete config/diffs; fix the 'full tRPC surface' comment to be accurate",
+    "packages/config SwarmConfig must match recon §6 / architecture §2: array-of-commands for setup/teardown/run + per-field before/after overlay (not single command + flat overlay)"
   ],
   "blocked": [],
   "last_updated": "2026-06-14"
