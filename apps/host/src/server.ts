@@ -91,9 +91,21 @@ export interface RunningHost {
   close(): Promise<void>;
 }
 
+/**
+ * Grove's durable home directory (the host manifest + VAPID keypair live under
+ * `<home>/host`). Honors a `GROVE_HOME` override so tests — and power users running
+ * multiple isolated instances — can relocate the entire host home off the real
+ * `~/.grove` without clobbering it. This is a legitimate seam (the daemon AND its
+ * local clients resolve through the same function, so they always agree), not a mock
+ * (ADR-0015 detached-lifecycle consequences).
+ */
+export function groveHome(): string {
+  return process.env.GROVE_HOME ?? join(homedir(), ".grove");
+}
+
 /** The canonical manifest location a client looks for (cross-platform). */
 export function defaultManifestPath(): string {
-  return join(homedir(), ".grove", "host", "manifest.json");
+  return join(groveHome(), "host", "manifest.json");
 }
 
 /** Constant-time-ish bearer check over a header or `?token=` query (WS upgrades). */
@@ -144,7 +156,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
   // The host's durable home (manifest + VAPID keypair). Resolved up-front so the
   // VAPID public key is known before the services are built — the PWA subscribes
   // against it, and it is generated once + reused so devices stay subscribed.
-  const manifestDir = options.manifestDir ?? join(homedir(), ".grove", "host");
+  const manifestDir = options.manifestDir ?? join(groveHome(), "host");
   mkdirSync(manifestDir, { recursive: true });
   const vapid = loadOrCreateVapid(manifestDir);
 

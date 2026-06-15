@@ -10,6 +10,7 @@ export {
   startHost,
   runDaemon,
   defaultManifestPath,
+  groveHome,
   type StartHostOptions,
   type RunDaemonOptions,
   type RunningHost,

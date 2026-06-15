@@ -1,14 +1,19 @@
-import { readFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { closeSync, mkdirSync, openSync, readFileSync, rmSync } from "node:fs";
 import { networkInterfaces } from "node:os";
-import { createHost } from "@swarm/host";
+import { dirname, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { type RunningHost, defaultManifestPath, runDaemon } from "@swarm/host/daemon";
 import qrcode from "qrcode-terminal";
 
 /**
  * @swarm/cli — the `grove` command-line entrypoint (spec §2, P13). Verb parsing
- * is real from Phase 0; `grove host` starts the real headless daemon (Phase 2),
- * `grove pair` bootstraps the mobile PWA (Phase 4, ADR-0014); remote/daemon-detach
- * behavior attaches in Phase 5.
+ * is real from Phase 0; `grove host` starts the real headless daemon in the
+ * FOREGROUND (Phase 2, debugging); `grove pair` bootstraps the mobile PWA (Phase 4,
+ * ADR-0014). Phase-5 W1 (ADR-0015) wires the daemon LIFECYCLE — `grove start`
+ * (detached background daemon under Node, ADR-0007a), `grove stop` (tree-kill by
+ * manifest PID, ADR-0011) and `grove status` (real liveness probe).
  */
 
 export const CLI_VERSION = "0.1.0";
@@ -41,12 +46,6 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
     throw new Error(`Unknown grove command: ${first}`);
   }
   return { command: first, args: argv.slice(1) };
-}
-
-/** Render the line the `grove status` verb prints. */
-export function statusLine(): string {
-  const status = createHost().status();
-  return `grove ${status.version} bound ${status.boundTo} online=${status.online}`;
 }
 
 export interface HostArgs {
@@ -197,18 +196,389 @@ export async function runPair(args: readonly string[] = []): Promise<void> {
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Phase-5 W1 — real daemon lifecycle (ADR-0015): start (detached) / stop / status.
+// ──────────────────────────────────────────────────────────────────────────
+
+/** This module's path on disk — re-invoked under Node to run the detached daemon. */
+const SELF_PATH = fileURLToPath(import.meta.url);
+/** Per-probe `/healthz` timeout. */
+const HEALTHZ_TIMEOUT_MS = 1500;
+/** How long `start` waits for the spawned daemon to become reachable. */
+const START_POLL_TIMEOUT_MS = 30_000;
+/** Max detached-spawn attempts before `start` gives up (transient boot-crash retry). */
+const START_MAX_ATTEMPTS = 3;
+/** Grace window for each kill stage in `stop` before escalating / giving up. */
+const STOP_GRACE_MS = 4000;
+
+/** The on-disk handshake the running host writes (`@swarm/host` HostManifest). */
+interface DaemonManifest {
+  readonly endpoint: string;
+  readonly token: string;
+  readonly pid: number;
+  readonly startedAt: string;
+}
+
+/** Read + parse the host manifest, or `null` when there is no running host. */
+function readManifest(): DaemonManifest | null {
+  try {
+    return JSON.parse(readFileSync(defaultManifestPath(), "utf8")) as DaemonManifest;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Cross-platform "is this PID alive?". Signal `0` probes a process without
+ * delivering a signal: it throws `ESRCH` when the PID is gone and `EPERM` when the
+ * process exists but is owned by another user (⇒ alive).
+ */
+function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** Probe the unauthenticated `/healthz` liveness endpoint with a bounded timeout. */
+async function healthzOk(endpoint: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${endpoint}/healthz`, {
+      signal: AbortSignal.timeout(HEALTHZ_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      return false;
+    }
+    const body = (await res.json()) as { ok?: boolean };
+    return body.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+/** The daemon MUST run under Node, never Bun (node-pty, ADR-0007a). */
+function nodeBin(): string {
+  // Under Node, reuse the exact running binary; under Bun, resolve `node` off PATH.
+  return process.versions.bun ? "node" : process.execPath;
+}
+
+/**
+ * Terminate a daemon process TREE by PID (ADR-0011). On Windows there is no
+ * deliverable graceful signal for a windowless detached process, so `taskkill /T`
+ * (whole tree) is used — without `/F` for the graceful pass, with `/F` to force. On
+ * POSIX the daemon is spawned `detached` (its own process group), so a negative PID
+ * delivers the signal to the WHOLE group (the daemon + every PTY it spawned), with a
+ * single-PID fallback when the group is already gone.
+ */
+function treeKill(pid: number, signal: "SIGTERM" | "SIGKILL"): void {
+  if (process.platform === "win32") {
+    const args = ["/pid", String(pid), "/t"];
+    if (signal === "SIGKILL") {
+      args.push("/f");
+    }
+    spawnSync("taskkill", args, { stdio: "ignore" });
+    return;
+  }
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // Already gone — killing is best-effort.
+    }
+  }
+}
+
+/** Human-friendly uptime from the manifest's ISO `startedAt`. */
+function formatUptime(startedAt: string): string {
+  const ms = Date.now() - new Date(startedAt).getTime();
+  if (!Number.isFinite(ms) || ms < 0) {
+    return "unknown";
+  }
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) {
+    return `${h}h${m}m${s}s`;
+  }
+  return m > 0 ? `${m}m${s}s` : `${s}s`;
+}
+
+export interface DaemonStatus {
+  readonly running: boolean;
+  readonly endpoint: string | null;
+  readonly pid: number | null;
+  readonly startedAt: string | null;
+  readonly detail: string;
+}
+
+/**
+ * Resolve real daemon liveness: the manifest must exist, its PID must be alive, AND
+ * `/healthz` must answer. Honest about every degraded case (no manifest, stale
+ * manifest, process up but endpoint silent).
+ */
+export async function daemonStatus(): Promise<DaemonStatus> {
+  const manifest = readManifest();
+  if (!manifest) {
+    return { running: false, endpoint: null, pid: null, startedAt: null, detail: "no manifest" };
+  }
+  if (!pidAlive(manifest.pid)) {
+    return {
+      running: false,
+      endpoint: manifest.endpoint,
+      pid: manifest.pid,
+      startedAt: manifest.startedAt,
+      detail: "stale manifest (process not alive)",
+    };
+  }
+  const healthy = await healthzOk(manifest.endpoint);
+  return {
+    running: healthy,
+    endpoint: manifest.endpoint,
+    pid: manifest.pid,
+    startedAt: manifest.startedAt,
+    detail: healthy ? "healthy" : "process alive but endpoint not responding",
+  };
+}
+
+/** `grove status` — print real daemon liveness (running/unhealthy/stopped + uptime). */
+export async function runStatus(): Promise<DaemonStatus> {
+  const status = await daemonStatus();
+  if (status.running && status.endpoint && status.startedAt) {
+    console.log(
+      `grove daemon: RUNNING  endpoint=${status.endpoint} pid=${status.pid} uptime=${formatUptime(status.startedAt)}`,
+    );
+  } else if (status.detail === "process alive but endpoint not responding" && status.endpoint) {
+    console.log(
+      `grove daemon: UNHEALTHY  pid=${status.pid} alive but ${status.endpoint} not responding`,
+    );
+  } else {
+    console.log(`grove daemon: STOPPED (${status.detail})`);
+  }
+  return status;
+}
+
+export interface StartResult {
+  readonly endpoint: string;
+  readonly pid: number;
+  readonly alreadyRunning: boolean;
+}
+
+/**
+ * `grove start [--port N] [--db DIR] [--host H | --lan]` — start the host daemon
+ * DETACHED so the CLI returns while the host keeps running. The daemon is exactly
+ * what `grove host` runs (`runDaemon`), but re-invoked as a NODE child (node-pty
+ * cannot run under Bun — ADR-0007a): `node <cli> host <args>` with `detached: true`
+ * + `unref()` so it outlives this process, stdio redirected to a log file. The child
+ * writes the manifest (incl. its own PID); we poll `/healthz` until reachable, then
+ * print the endpoint + a `grove pair` hint. Idempotent: a live daemon (PID alive +
+ * `/healthz` ok) is reported, never double-started.
+ */
+export async function runStart(args: readonly string[] = []): Promise<StartResult> {
+  const existing = readManifest();
+  if (existing && pidAlive(existing.pid) && (await healthzOk(existing.endpoint))) {
+    console.log(
+      `grove daemon already running at ${existing.endpoint} (pid ${existing.pid}). Use 'grove stop' to stop it.`,
+    );
+    return { endpoint: existing.endpoint, pid: existing.pid, alreadyRunning: true };
+  }
+
+  const hostDir = dirname(defaultManifestPath());
+  mkdirSync(hostDir, { recursive: true });
+  const logPath = join(hostDir, "daemon.log");
+  const knownPid = existing?.pid;
+
+  // Bounded retry on an EARLY-EXIT only: under heavy parallel load on Windows the
+  // daemon boot can crash on transient filesystem contention (PGlite data dir / VAPID
+  // write — the ADR-0011 file-lock class), which a re-spawn rides out. A hang/timeout
+  // is NOT retried (it would mask a real stall); it surfaces immediately.
+  for (let attempt = 1; attempt <= START_MAX_ATTEMPTS; attempt += 1) {
+    const outcome = await spawnDaemonOnce(args, logPath, knownPid);
+    if (outcome.kind === "started") {
+      console.log(`grove daemon started at ${outcome.endpoint} (pid ${outcome.pid}).`);
+      console.log("Run 'grove pair' to link a phone, or 'grove status' to check on it.");
+      return { endpoint: outcome.endpoint, pid: outcome.pid, alreadyRunning: false };
+    }
+    if (outcome.kind === "timeout") {
+      throw new Error(
+        `grove daemon did not become reachable within ${START_POLL_TIMEOUT_MS / 1000}s.${tailLog(logPath)}`,
+      );
+    }
+    // outcome.kind === "exited": transient boot crash. Retry unless out of attempts.
+    if (attempt === START_MAX_ATTEMPTS) {
+      throw new Error(
+        `grove daemon exited early (code ${outcome.code}) on every one of ${START_MAX_ATTEMPTS} attempts.${tailLog(logPath)}`,
+      );
+    }
+    await delay(400);
+  }
+  // Unreachable: the loop returns or throws on every path.
+  throw new Error("grove daemon failed to start.");
+}
+
+type SpawnOutcome =
+  | { readonly kind: "started"; readonly endpoint: string; readonly pid: number }
+  | { readonly kind: "exited"; readonly code: number | null }
+  | { readonly kind: "timeout" };
+
+/**
+ * One detached spawn + reachability poll. Spawns `node <cli> host <args>` with
+ * `detached: true` + `unref()` (so the daemon outlives this CLI), stdio → log file,
+ * then polls until the child writes a FRESH manifest AND `/healthz` answers. Returns
+ * `started` on success, `exited` if the child dies first (caller may retry), or
+ * `timeout` if neither happens within the bound.
+ */
+async function spawnDaemonOnce(
+  args: readonly string[],
+  logPath: string,
+  knownPid: number | undefined,
+): Promise<SpawnOutcome> {
+  const logFd = openSync(logPath, "a");
+  const child = spawn(nodeBin(), [SELF_PATH, "host", ...args], {
+    detached: true,
+    stdio: ["ignore", logFd, logFd],
+    windowsHide: true,
+  });
+  child.unref();
+  closeSync(logFd); // the child holds its own dup; release the parent's copy.
+
+  let childExit: number | null | undefined;
+  child.once("exit", (code) => {
+    childExit = code;
+  });
+
+  const deadline = Date.now() + START_POLL_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (childExit !== undefined) {
+      return { kind: "exited", code: childExit };
+    }
+    const manifest = readManifest();
+    if (
+      manifest &&
+      manifest.pid !== knownPid &&
+      pidAlive(manifest.pid) &&
+      (await healthzOk(manifest.endpoint))
+    ) {
+      return { kind: "started", endpoint: manifest.endpoint, pid: manifest.pid };
+    }
+    await delay(250);
+  }
+  return { kind: "timeout" };
+}
+
+/** Tail the daemon log for an error message — the daemon's own crash reason. */
+function tailLog(logPath: string): string {
+  try {
+    const text = readFileSync(logPath, "utf8").trimEnd();
+    if (!text) {
+      return ` See ${logPath}`;
+    }
+    const tail = text.length > 2000 ? `…${text.slice(-2000)}` : text;
+    return ` See ${logPath}:\n${tail}`;
+  } catch {
+    return ` See ${logPath}`;
+  }
+}
+
+export interface StopResult {
+  readonly stopped: boolean;
+  readonly pid: number | null;
+  readonly wasRunning: boolean;
+}
+
+/**
+ * `grove stop` — read the manifest PID and terminate the daemon's whole process
+ * tree: a graceful pass first (SIGTERM to the process group on POSIX / `taskkill /T`
+ * on Windows), then a forced pass (SIGKILL / `taskkill /T /F`) if it survives the
+ * grace window (ADR-0011). Confirms the PID is gone, then clears the manifest so
+ * `status` reads stopped. Honest when nothing is running.
+ */
+export async function runStop(): Promise<StopResult> {
+  const manifest = readManifest();
+  if (!manifest) {
+    console.log("grove daemon: not running (no manifest).");
+    return { stopped: true, pid: null, wasRunning: false };
+  }
+  if (!pidAlive(manifest.pid)) {
+    rmSync(defaultManifestPath(), { force: true });
+    console.log(`grove daemon: not running (stale manifest for pid ${manifest.pid} cleared).`);
+    return { stopped: true, pid: manifest.pid, wasRunning: false };
+  }
+
+  // Graceful, then forced if it survives.
+  treeKill(manifest.pid, "SIGTERM");
+  await waitForDeath(manifest.pid, STOP_GRACE_MS);
+  if (pidAlive(manifest.pid)) {
+    treeKill(manifest.pid, "SIGKILL");
+    await waitForDeath(manifest.pid, STOP_GRACE_MS);
+  }
+
+  const stopped = !pidAlive(manifest.pid);
+  if (stopped) {
+    // A force-kill never runs the daemon's own cleanup, so clear the manifest here.
+    rmSync(defaultManifestPath(), { force: true });
+    console.log(`grove daemon stopped (pid ${manifest.pid}).`);
+  } else {
+    console.log(`grove daemon: FAILED to stop pid ${manifest.pid} — still alive after force-kill.`);
+  }
+  return { stopped, pid: manifest.pid, wasRunning: true };
+}
+
+/** Poll until `pid` is dead or `timeoutMs` elapses (bounded; never hangs). */
+async function waitForDeath(pid: number, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && pidAlive(pid)) {
+    await delay(150);
+  }
+}
+
+/**
+ * Wire graceful shutdown for the foreground daemon (`grove host` and the detached
+ * child `grove start` spawns): on SIGTERM/SIGINT close the host — which releases the
+ * sockets, tree-kills its PTYs and removes the manifest — then exit. This makes
+ * `grove stop`'s graceful pass actually clean up on POSIX; on Windows it falls
+ * through to the forced `taskkill /T /F` (no deliverable graceful signal there).
+ */
+function installDaemonShutdown(host: RunningHost): void {
+  let closing = false;
+  const shutdown = (): void => {
+    if (closing) {
+      return;
+    }
+    closing = true;
+    host
+      .close()
+      .catch(() => undefined)
+      .finally(() => process.exit(0));
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
+}
+
 // Run the dispatcher only when executed directly (never on import). The cast
 // keeps this typecheck-clean without depending on a runtime-specific ImportMeta
 // augmentation; the field is set by Bun and Node when a module is the entrypoint.
 if ((import.meta as { main?: boolean }).main === true) {
   const { command, args } = parseArgv(process.argv.slice(2));
-  if (command === "host") {
-    await runHost(args);
+  if (command === "start") {
+    await runStart(args);
+  } else if (command === "stop") {
+    await runStop();
+  } else if (command === "host") {
+    const host = await runHost(args);
+    installDaemonShutdown(host);
   } else if (command === "pair") {
     await runPair(args);
   } else if (command === "status") {
-    console.log(statusLine());
+    await runStatus();
   } else {
-    console.log(`grove: '${command}' is not wired yet (Phase 2 ships 'host' + 'status').`);
+    console.log(`grove: '${command}' is not wired yet.`);
   }
 }
