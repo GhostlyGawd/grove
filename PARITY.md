@@ -17,7 +17,7 @@ Status legend: ☐ not started · ◐ in progress · ✅ verified.
 - ✅ **P11 Private by default** — explicit connections only; nothing phones home. _Phase 2 (loopback endpoint + bearer auth rejects unauthenticated API/WS); evidence/phase-2._
 
 ## Spec additions (beyond original)
-- ☐ **P12 Mobile-native control** — full orchestration from the phone (§8).
+- ◐ **P12 Mobile-native control** — full orchestration from the phone (§8). _Phase 4 in progress: W1 PWA skeleton on @swarm/ui (manifest + icons + BottomNav) ✅; W2 host-served PWA + QR single-use-code pairing → live tRPC/sync (bearer in IndexedDB) ✅ (host pair round-trip 27/27 + mobile pairing e2e 2/2 vs real host). Remaining: W3 read journeys, W4 terminal+dispatch, W5 offline SW + Web Push, W6 e2e CI + Critic → v0.5.0. ADR-0014._
 - ☐ **P13 Self-bootstrap + phone-only remote setup** — stand it up without touching the PC.
 - ◐ **P14 Native Windows 10/11 + macOS + Linux** — engine + desktop + full workflow, not WSL-only.
       Built-in terminal hosts Windows shells (PowerShell/cmd/Git Bash/WSL) + Unix shells; user presets run on Windows shells;
