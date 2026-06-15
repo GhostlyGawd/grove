@@ -181,6 +181,9 @@ export function App() {
         data-testid="app-titlebar"
         className="flex h-9 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-3"
       >
+        {/* Top-level document heading (page-has-heading-one). Visually hidden:
+            the visible brand mark below carries the same name. */}
+        <h1 className="sr-only">Grove mission control</h1>
         <span className="flex items-center gap-2">
           <GroveMark className="size-5 text-accent-fg" />
           <span className="text-sm font-semibold tracking-tight text-fg">Grove</span>

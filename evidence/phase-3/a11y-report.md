@@ -95,3 +95,60 @@ The moderate item is a follow-up. Concrete fixes:
 
 Reproduce: from `apps/desktop`, `node ./node_modules/@playwright/test/cli.js test e2e/_a11y.spec.ts`
 (violations + keyboard results are written to `grove-a11y-results.json` in the OS temp dir).
+
+## Post-fix re-audit (2026-06-15)
+
+The 1 critical + 2 serious blockers (and the moderate follow-up) were fixed and the audit
+re-run against the same real, connected renderer. **All blocking-tier violations are gone.**
+
+### New axe-core results — violations by impact
+
+| Surface | critical | serious | moderate | minor | rules pass |
+|---|---|---|---|---|---|
+| Main shell (connected) | **0** | **0** | **0** | **0** | 39 (was 36) |
+| Settings dialog (scoped) | **0** | **0** | **0** | **0** | 18 |
+| Settings dialog (full page, modal open) | **0** | **0** | **0** | **0** | 23 |
+
+`incomplete` (needs-review) buckets are also empty across all three contexts. The shell's pass
+count rose 36 → 39: the three previously-failing rules (`aria-valid-attr-value`,
+`color-contrast`, `page-has-heading-one`) now pass. Keyboard navigation + focus-trap: **all 9
+checks still pass**.
+
+### Exact changes made
+
+1. **CRITICAL — `aria-valid-attr-value` → fixed.** `packages/ui/src/react/Tabs.tsx`: the
+   `role="tab"` button now emits `aria-controls` **only for the active tab when a panel is
+   actually rendered** — `aria-controls={renderPanel && selected ? `${baseId}-panel-${item.value}` : undefined}`.
+   This is correct for **both** modes: with `renderPanel={false}` (desktop `ContentTabs`, panels
+   rendered separately) no tab points at a non-existent panel; with `renderPanel={true}`
+   (showcase) only the active tab — whose panel is the one actually in the DOM — is wired, so
+   inactive tabs no longer dangle either. No panel `aria-labelledby` change needed (it already
+   targets the always-present active tab button).
+
+2. **SERIOUS — color-contrast, WorkspaceRail → fixed.**
+   `apps/desktop/src/renderer/WorkspaceRail.tsx`: the selected row's trailing branch label was
+   `text-fg-subtle`, which is only **4.0:1** on the selected row's `bg-accent-bg`-over-`bg-surface`
+   composite (below AA 4.5:1). It now uses `text-fg-muted` **when the row is selected** (6.5:1 —
+   passes), and keeps `text-fg-subtle` on unselected rows (which sit on the plain surface where it
+   already passes). Existing `@swarm/ui` token; no new hex.
+
+3. **SERIOUS — color-contrast, SettingsDialog → fixed.**
+   `apps/desktop/src/renderer/settings/SettingsDialog.tsx`: the two section `<h3>` headings moved
+   from `text-fg-subtle` (4.38:1 on `bg-overlay` — below AA) to `text-fg-muted` (7.06:1 — passes).
+
+4. **MODERATE — `page-has-heading-one` → fixed.** `apps/desktop/src/renderer/App.tsx`: added a
+   visually-hidden top-level heading `<h1 className="sr-only">Grove mission control</h1>` as the
+   first child of the titlebar. The document now has an `<h1>` with zero layout impact (the
+   visible brand mark carries the same name).
+
+### Gate re-run (same host, Windows 10 19045)
+
+- a11y spec (`_a11y.spec.ts`): **3/3 pass**; 0 critical / 0 serious / 0 moderate / 0 minor on
+  both the shell and the Settings dialog (counts above).
+- Full desktop e2e (`node ./node_modules/@playwright/test/cli.js test`): **21/21 pass**. (One
+  full-suite run showed a single timeout in `_perf.spec.ts` terminal-stream round-trip — a
+  cold-PowerShell-spawn timing flake under full-suite load; it passes in isolation at 14.3s,
+  well under the 30s budget, and terminal streaming is independently verified by `content.spec.ts`
+  and the a11y `Ctrl+1` keyboard check. The ARIA-only Tabs change cannot affect PTY timing.)
+- `turbo run typecheck --force`: **17/17**. `bun run lint` (biome): **clean** (180 files).
+  Banned-token scan (RUBRIC §6.1) over `apps packages`: **empty**.

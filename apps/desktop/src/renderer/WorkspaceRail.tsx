@@ -160,21 +160,31 @@ export function WorkspaceRail({
             </div>
           ) : (
             <div className="flex flex-col gap-0.5">
-              {visible.map((ws) => (
-                <ListRow
-                  key={ws.id}
-                  selected={selectedId === ws.id}
-                  onSelect={() => onSelect(ws.id)}
-                  leading={<AgentStatusDot status={effectiveStatus(ws, liveStatus)} />}
-                  trailing={
-                    <span className="max-w-24 truncate font-mono text-2xs text-fg-subtle">
-                      {ws.branch}
-                    </span>
-                  }
-                >
-                  {ws.name}
-                </ListRow>
-              ))}
+              {visible.map((ws) => {
+                const isSelected = selectedId === ws.id;
+                return (
+                  <ListRow
+                    key={ws.id}
+                    selected={isSelected}
+                    onSelect={() => onSelect(ws.id)}
+                    leading={<AgentStatusDot status={effectiveStatus(ws, liveStatus)} />}
+                    trailing={
+                      // On the selected row's accent-bg surface, fg-subtle drops
+                      // below AA (4.0:1); fg-muted clears it (6.5:1). Unselected
+                      // rows keep fg-subtle (passes on the plain surface).
+                      <span
+                        className={`max-w-24 truncate font-mono text-2xs ${
+                          isSelected ? "text-fg-muted" : "text-fg-subtle"
+                        }`}
+                      >
+                        {ws.branch}
+                      </span>
+                    }
+                  >
+                    {ws.name}
+                  </ListRow>
+                );
+              })}
             </div>
           )}
         </nav>

@@ -96,7 +96,12 @@ export function Tabs({
               role="tab"
               id={`${baseId}-tab-${item.value}`}
               aria-selected={selected}
-              aria-controls={`${baseId}-panel-${item.value}`}
+              // Only reference a panel that actually exists in the DOM. Panels
+              // render solely for the active tab, and not at all when
+              // renderPanel is false (consumers render their own), so wiring
+              // aria-controls on inactive/no-panel tabs would dangle (axe
+              // aria-valid-attr-value). Point only the active tab at its panel.
+              aria-controls={renderPanel && selected ? `${baseId}-panel-${item.value}` : undefined}
               tabIndex={selected ? 0 : -1}
               onClick={() => select(item.value)}
               className={cn(
