@@ -57,6 +57,8 @@
     "[DONE wave-1] @swarm/api completed to all 13 routers of architecture §3.1; SwarmConfig now Command[] arrays + per-OS shells + per-field overlay (9 tests)",
     "[phase-1 a11y nit, non-blocking] extend tokens.test.ts to assert fg-subtle AA on raised+overlay surfaces (currently only surface); fold into Phase 6 a11y audit if it forces a token tweak"
   ],
-  "blocked": [],
+  "blocked": [
+    "EXTERNAL/BILLING (needs user): GitHub Actions is spending-limit/payment blocked on the private repo — both Phase-3 pushes' CI jobs 'were not started because recent account payments have failed or your spending limit needs to be increased' (runs 27539598023, 27541523156; all 3 OSes, never started). main @ 0575214 CODE IS GREEN (full clean-install repro on Windows: install+lint+typecheck17/17+build17/17+test9/9 all cold-green — ADR-0012). No version can be cut until CI runs green again. FIX: raise Actions spending limit / fix payment at github.com/settings/billing, OR make the repo public (free unlimited Actions; aligns with OSS-replica goal — user's publish call). See ADR-0012."
+  ],
   "last_updated": "2026-06-15"
 }
