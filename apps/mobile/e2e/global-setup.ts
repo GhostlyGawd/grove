@@ -122,7 +122,10 @@ async function globalSetup(): Promise<void> {
     status: "running",
   });
 
-  const eventLog = new EventLog(new PgliteEventLogStore(store, "grove-mobile-e2e"));
+  // The host-id is a branded string (`HostId`); cast against the constructor's own
+  // parameter type so this e2e harness file typechecks without importing the brand.
+  const hostId = "grove-mobile-e2e" as ConstructorParameters<typeof PgliteEventLogStore>[1];
+  const eventLog = new EventLog(new PgliteEventLogStore(store, hostId));
   const supervisor = new PtySupervisor();
   const host = await startHost({
     store,
