@@ -1,11 +1,10 @@
-import { EmptyState } from "@swarm/ui/react";
-import { SquareTerminal } from "lucide-react";
 import { SettingsPanel } from "../shell/SettingsPanel.tsx";
 import type { TabDef, TabId } from "../shell/tabs.ts";
 import { AgentsView } from "./AgentsView.tsx";
 import { ConnectionCard } from "./ConnectionCard.tsx";
 import { DiffReview } from "./DiffReview.tsx";
 import { WorkspaceList } from "./WorkspaceList.tsx";
+import { TerminalView } from "./terminal/TerminalView.tsx";
 import type { HostState } from "./useHost.ts";
 
 interface TabBodyProps {
@@ -17,12 +16,14 @@ interface TabBodyProps {
   readonly onOpenWorkspace: (id: string) => void;
   /** Make a worktree the active one (list picker, diff picker). */
   readonly onSetActive: (id: string) => void;
+  /** Bumped after a dispatch so the Agents roll-up refetches its live sessions. */
+  readonly dispatchNonce: number;
 }
 
 /**
- * The live body for the active section once the phone is connected (W3). The read
- * journeys — worktree list + detail, cross-workspace agents, read-only diff — all
- * read from the REAL host. Terminal (W4) stays an honest, non-promissory note.
+ * The live body for the active section once the phone is connected. The read journeys
+ * (worktree list + detail, cross-workspace agents, read-only diff) and the W4 write
+ * journeys (touch terminal over the `/terminal` WS, dispatch) all run on the REAL host.
  */
 export function ConnectedTabBody({
   host,
@@ -30,6 +31,7 @@ export function ConnectedTabBody({
   activeWorkspaceId,
   onOpenWorkspace,
   onSetActive,
+  dispatchNonce,
 }: TabBodyProps) {
   if (tab.id === "workspaces") {
     return (
@@ -43,7 +45,12 @@ export function ConnectedTabBody({
   }
 
   if (tab.id === "agents") {
-    return <AgentsView host={host} onOpenWorkspace={onOpenWorkspace} />;
+    // Remount on dispatch so a freshly started agent appears without a manual refresh.
+    return <AgentsView key={dispatchNonce} host={host} onOpenWorkspace={onOpenWorkspace} />;
+  }
+
+  if (tab.id === "terminal") {
+    return <TerminalView host={host} workspaceId={activeWorkspaceId} />;
   }
 
   if (tab.id === "diff") {
@@ -68,17 +75,16 @@ export function ConnectedTabBody({
     );
   }
 
-  // Terminal (W4): an honest state — the desktop owns terminals for now.
-  return (
-    <EmptyState
-      icon={<SquareTerminal />}
-      title="Terminal"
-      description="Open a terminal from the Grove desktop app for now — this phone is paired and live for everything else."
-    />
-  );
+  // Settings is handled above; every live tab id has a body. This satisfies the
+  // exhaustive return without a misleading fallback surface.
+  return null;
 }
 
-/** Whether a tab's body fills the panel (lists/forms) vs. centers an empty state. */
-export function tabBodyFills(tabId: TabId): boolean {
-  return tabId !== "terminal";
+/**
+ * The PanelBody class for a tab: the terminal owns its full height + internal layout
+ * (xterm well + accessory bar), so it gets no padding and clips; every other section
+ * is a scrollable column.
+ */
+export function tabBodyClassName(tabId: TabId): string {
+  return tabId === "terminal" ? "p-0 overflow-hidden" : "overflow-auto";
 }

@@ -10,6 +10,11 @@ import type { HostTrpcClient } from "./host-client.ts";
 export type FileChange = Awaited<ReturnType<HostTrpcClient["diffs"]["status"]["query"]>>[number];
 export type FileDiff = Awaited<ReturnType<HostTrpcClient["diffs"]["getFileDiff"]["query"]>>;
 export type GitStatus = Awaited<ReturnType<HostTrpcClient["workspaces"]["gitStatus"]["query"]>>;
+export type ShellInfo = Awaited<ReturnType<HostTrpcClient["terminal"]["shellFor"]["query"]>>;
+export type AdapterDescriptor = Awaited<
+  ReturnType<HostTrpcClient["agents"]["listAdapters"]["query"]>
+>[number];
+export type ProjectInfo = Awaited<ReturnType<HostTrpcClient["projects"]["list"]["query"]>>[number];
 
 /** One agent session bound to the worktree it runs in — the Agents-tab row model. */
 export interface AgentRow {
@@ -97,6 +102,103 @@ export function useSessions(
       cancelled = true;
     };
   }, [client, workspaceId]);
+
+  return result;
+}
+
+/**
+ * The worktree's terminal descriptor (`terminal.shellFor`): the cwd the PTY spawns in
+ * and the default shell a fresh session should request. The mobile terminal reads
+ * this before opening the `/terminal` WS so it asks for the right shell (W4).
+ */
+export function useShellFor(
+  client: HostTrpcClient | null,
+  workspaceId: string | null,
+): Async<ShellInfo> {
+  const [result, setResult] = useState<Async<ShellInfo>>({ state: "loading" });
+
+  useEffect(() => {
+    if (!client || !workspaceId) {
+      return;
+    }
+    let cancelled = false;
+    setResult({ state: "loading" });
+    void (async () => {
+      try {
+        const value = await client.terminal.shellFor.query({ workspaceId });
+        if (!cancelled) {
+          setResult({ state: "ready", value });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setResult({ state: "error", error: errorText(err) });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, workspaceId]);
+
+  return result;
+}
+
+/** The host's built-in agent adapters (`agents.listAdapters`) — the dispatch picker. */
+export function useAdapters(client: HostTrpcClient | null): Async<readonly AdapterDescriptor[]> {
+  const [result, setResult] = useState<Async<readonly AdapterDescriptor[]>>({ state: "loading" });
+
+  useEffect(() => {
+    if (!client) {
+      return;
+    }
+    let cancelled = false;
+    setResult({ state: "loading" });
+    void (async () => {
+      try {
+        const value = await client.agents.listAdapters.query();
+        if (!cancelled) {
+          setResult({ state: "ready", value });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setResult({ state: "error", error: errorText(err) });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  return result;
+}
+
+/** The host's registered projects (`projects.list`) — the create-worktree picker. */
+export function useProjects(client: HostTrpcClient | null): Async<readonly ProjectInfo[]> {
+  const [result, setResult] = useState<Async<readonly ProjectInfo[]>>({ state: "loading" });
+
+  useEffect(() => {
+    if (!client) {
+      return;
+    }
+    let cancelled = false;
+    setResult({ state: "loading" });
+    void (async () => {
+      try {
+        const value = await client.projects.list.query();
+        if (!cancelled) {
+          setResult({ state: "ready", value });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setResult({ state: "error", error: errorText(err) });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
 
   return result;
 }

@@ -1,6 +1,16 @@
-import { BottomNav, Panel, PanelBody, PanelHeader, PanelTitle, Spinner } from "@swarm/ui/react";
+import {
+  BottomNav,
+  Button,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelTitle,
+  Spinner,
+} from "@swarm/ui/react";
+import { Rocket } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { ConnectedTabBody, tabBodyFills } from "./host/ConnectedView.tsx";
+import { ConnectedTabBody, tabBodyClassName } from "./host/ConnectedView.tsx";
+import { DispatchSheet } from "./host/DispatchSheet.tsx";
 import { PairingScreen } from "./host/PairingScreen.tsx";
 import { WorkspaceDetailSheet } from "./host/WorkspaceDetailSheet.tsx";
 import { useHost } from "./host/useHost.ts";
@@ -23,12 +33,12 @@ function StatusFrame({ message }: { readonly message: string }) {
 }
 
 /**
- * The Grove phone shell (Phase-4 W3): the PWA, connected to the REAL host
- * (ADR-0014). It resolves a stored pairing from IndexedDB and either shows the
- * pairing screen or goes LIVE — real `host.status` + `workspaces.list` + `/sync`,
- * with a disconnect that unlinks the device. The read journeys (worktree list +
- * detail, cross-workspace agents, read-only diff) layer onto this live connection;
- * the terminal + dispatch journeys arrive in W4.
+ * The Grove phone shell (Phase-4): the PWA, connected to the REAL host (ADR-0014). It
+ * resolves a stored pairing from IndexedDB and either shows the pairing screen or goes
+ * LIVE — real `host.status` + `workspaces.list` + `/sync`, with a disconnect that
+ * unlinks the device. The read journeys (worktree list + detail, cross-workspace
+ * agents, read-only diff) and the W4 write journeys (touch terminal over the
+ * `/terminal` WS, dispatch/quick-create) all layer onto this live connection.
  */
 export function App() {
   const host = useHost();
@@ -37,6 +47,10 @@ export function App() {
   // open. Both are client-side selection over the live list — no host writes (W4).
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  // Dispatch (W4): the quick-create Sheet is conditionally mounted; `dispatchNonce`
+  // forces the Agents roll-up to refetch after a real dispatch lands.
+  const [dispatchOpen, setDispatchOpen] = useState(false);
+  const [dispatchNonce, setDispatchNonce] = useState(0);
 
   const navItems = useMemo(
     () => NAV_TABS.map(({ id, label, icon: Icon }) => ({ id, label, icon: <Icon /> })),
@@ -52,6 +66,19 @@ export function App() {
     setActive("diff");
     setDetailId(null);
   }, []);
+
+  // A real dispatch landed: focus the new worktree, pull it into the live list, and
+  // jump to where it now shows up (the worktree list, or the live Agents roll-up).
+  const refresh = host.refresh;
+  const onDispatched = useCallback(
+    ({ kind, workspaceId }: { kind: "worktree" | "agent"; workspaceId: string }) => {
+      refresh();
+      setActiveWorkspaceId(workspaceId);
+      setDispatchNonce((n) => n + 1);
+      setActive(kind === "worktree" ? "workspaces" : "agents");
+    },
+    [refresh],
+  );
 
   if (host.phase === "loading") {
     return <StatusFrame message="Looking for a paired host…" />;
@@ -94,16 +121,31 @@ export function App() {
 
       <main className="min-h-0 overflow-hidden px-3 pt-3 pb-2 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))]">
         <Panel className="h-full">
-          <PanelHeader>
+          <PanelHeader
+            actions={
+              tab.id !== "settings" ? (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={<Rocket className="size-3.5" />}
+                  className="min-h-8"
+                  onClick={() => setDispatchOpen(true)}
+                >
+                  Dispatch
+                </Button>
+              ) : undefined
+            }
+          >
             <PanelTitle icon={<TabIcon />}>{tab.heading}</PanelTitle>
           </PanelHeader>
-          <PanelBody className={tabBodyFills(tab.id) ? "overflow-auto" : "grid place-items-center"}>
+          <PanelBody className={tabBodyClassName(tab.id)}>
             <ConnectedTabBody
               host={host}
               tab={tab}
               activeWorkspaceId={resolvedActiveId}
               onOpenWorkspace={openDetail}
               onSetActive={setActiveWorkspace}
+              dispatchNonce={dispatchNonce}
             />
           </PanelBody>
         </Panel>
@@ -120,6 +162,16 @@ export function App() {
           onClose={closeDetail}
           onSetActive={setActiveWorkspace}
           onReviewDiff={reviewDiff}
+        />
+      ) : null}
+
+      {/* Conditionally mounted — a closed @swarm/ui overlay still paints full-bleed
+          (ADR-0014 W3 consequence), so the dispatch Sheet is only in the tree while open. */}
+      {dispatchOpen ? (
+        <DispatchSheet
+          host={host}
+          onClose={() => setDispatchOpen(false)}
+          onDispatched={onDispatched}
         />
       ) : null}
 
