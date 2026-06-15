@@ -40,7 +40,7 @@ async function connect(page: Page): Promise<void> {
   await page.waitForTimeout(400);
 }
 
-test.use({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
+test.use({ viewport: { width: 1440, height: 900 } });
 
 test.describe("QA screens — Phase-3 wave-B2 (real host)", () => {
   test("01 workspace nav — shell with rail + content header", async ({ page }) => {
