@@ -113,6 +113,17 @@ function looksAbsolute(line: string): boolean {
  */
 export async function resolveExecutable(command: string): Promise<string | undefined> {
   const trimmed = command.trim();
+  // The Node runtime is the one command we can resolve with ZERO PATH lookup:
+  // `process.execPath` is the absolute path of the Node executing this process and is
+  // guaranteed to exist on disk. ConPTY's `SearchPath` ignores `PATHEXT`, and
+  // `where.exe node` proved unreliable in a spawned worker's PATH context on the GH
+  // `windows-latest` runner (it resolved to nothing there, so the bare `node` reached
+  // node-pty and threw "File not found"). Short-circuit a bare `node`/`node.exe` to
+  // `process.execPath` — the exact trick the mock adapter already uses (mock-adapter.ts),
+  // which is why the mock path passes on the runner while this generic path did not.
+  if (/^node(\.exe)?$/i.test(trimmed)) {
+    return process.execPath;
+  }
   if (isAbsolute(trimmed) && existsSync(trimmed)) {
     return trimmed;
   }

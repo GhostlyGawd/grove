@@ -179,6 +179,15 @@ export class PtySupervisor {
    * interactive probe + workspace lifecycle commands) still go through {@link spawn}.
    */
   spawnProcess(options: ProcessSpawnOptions): PtySession {
+    // Fail loudly and clearly on an empty executable. node-pty's `WindowsPtyAgent`
+    // would otherwise throw the cryptic "File not found: " (empty path) when handed
+    // `file=""` — which is what an unresolved command looks like. The caller is
+    // responsible for resolving to a concrete path (orchestrator → resolveExecutable).
+    if (options.file.trim().length === 0) {
+      throw new Error(
+        `spawnProcess: empty executable for workspace '${options.workspaceId}' (the command could not be resolved to an executable path)`,
+      );
+    }
     const pty = nativeSpawn(options.file, [...options.args], {
       name: "xterm-color",
       cwd: options.cwd,

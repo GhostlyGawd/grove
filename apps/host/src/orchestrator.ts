@@ -363,9 +363,13 @@ export class Orchestrator {
       // its extension (it does not apply PATHEXT), so a bare name like `node` or a
       // named preset's `claude` must be resolved to `node.exe` / `claude.cmd` first.
       // `resolveExecutable` (where.exe/which, PATHEXT-aware, run under Node) returns
-      // the real file; the adapter then runs a `.cmd`/`.bat` shim via cmd.exe.
-      // Best-effort: if unresolved, fall back to the bare command (surfaces as error).
-      const command = (await resolveExecutable(plan.command)) ?? plan.command;
+      // the real file; a bare `node` resolves to `process.execPath` with no PATH
+      // lookup; the adapter then runs a `.cmd`/`.bat` shim via cmd.exe.
+      // NEVER hand node-pty an empty `file`: `resolveExecutable` returns `undefined`
+      // (or, defensively, could yield a blank) when nothing resolved — fall back to the
+      // original command and let CreateProcess attempt it, rather than spawning "".
+      const resolved = await resolveExecutable(plan.command);
+      const command = resolved && resolved.trim().length > 0 ? resolved : plan.command;
       handle = launchTerminalAdapter({
         supervisor: this.supervisor,
         workspaceId: workspace.id,

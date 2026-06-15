@@ -161,3 +161,36 @@ The agent **is** the PTY's own process: its stdout writes straight to the ConPTY
   - `@swarm/pty-supervisor` integration (powershell + cmd interactive-spawn probe) → PASS (interactive `spawn` path unbroken).
 - Banned-token scan (RUBRIC §6.1 pattern) over `apps packages docs` → clean (0 matches).
 - Per-package deps only (no new third-party deps; `spawnProcess`/`onExit` use the existing `@homebridge/node-pty-prebuilt-multiarch`). Did not commit/push.
+
+---
+
+# Phase 2 — empty `resolveExecutable` on the GH windows-latest runner (final `@swarm/host` blocker)
+
+**Date:** 2026-06-15 · **Host:** Windows 10 Home build 19045 (x64) · **Toolchain:** Node v24.14.1, Bun 1.3.14 · **Context:** after the DIRECT-spawn fix landed, `@swarm/agent-adapters` (incl. the mock integration) PASSED on the GH `windows-latest` runner. The remaining failure was narrower: `@swarm/host#test` failed ONLY on windows-latest (green locally + on ubuntu/macOS CI) with `Error: File not found: ` — an **EMPTY** path — thrown by node-pty's `WindowsPtyAgent`, from `PtySupervisor.spawnProcess` ← `launchTerminalAdapter` ← `Orchestrator.launch` ← the REAL `generic` dispatch (host-integration's 4th/tRPC agent + the host-lifecycle worker). The 3 parallel MOCK agents passed because the mock spawns `process.execPath` (absolute); the REAL `generic` path (`node <fake-cli.mjs> …`) fed node-pty a `file` that resolved to nothing.
+
+## Root cause — `resolveExecutable("node")` produced no usable path on the runner, and the caller didn't guard it
+
+The orchestrator's pre-spawn step resolves a real adapter's bare command to a concrete, extension-bearing executable (ConPTY's `SearchPath` ignores `PATHEXT`, so a bare `node` is unspawnable). It did this through `resolveExecutable` → `where.exe node` (run under Node in the spawned worker). On the GH `windows-latest` runner that lookup returned **nothing usable** for `node` (the worker is itself launched as `spawnSync("node", …)` and `node` is on PATH only via the runner's `actions/setup-node` shim injection — a PATH context `where.exe` did not resolve to an existing `node.exe` inside the child worker). With no resolution the spawn `file` ended up empty, and the orchestrator's `?? plan.command` fallback could not save a blank value, so node-pty was asked to spawn `file=""` → the cryptic `File not found: ` (empty). The bug was twofold: (1) the **node** path depended on a fragile PATH lookup at all, and (2) **nothing guarded an empty executable** before it reached node-pty.
+
+## Fix — `process.execPath` for node (zero PATH lookup), never-empty fallback, and a `spawnProcess` guard
+
+- **`packages/agent-adapters/src/presets.ts` — `resolveExecutable`:** short-circuit a bare `node`/`node.exe` (case-insensitive) to **`process.execPath`** — the absolute path of the Node executing the worker, guaranteed to exist, with **no `where.exe`/PATH lookup**. This is the exact trick the mock adapter already uses (why the mock passed while generic did not), now shared by the generic node path. The existing absolute-path-as-is branch and the `where.exe`/`which` lookup (which still returns `undefined` for a genuinely-missing CLI, so `detectAdapter`'s `not_found` contract + its tests are intact) are unchanged.
+- **`apps/host/src/orchestrator.ts` — real/`generic` dispatch:** replaced `(await resolveExecutable(plan.command)) ?? plan.command` with an explicit non-empty guard — `const command = resolved && resolved.trim().length > 0 ? resolved : plan.command` — so a blank/whitespace resolution can never be passed through; it falls back to the original command (let CreateProcess attempt it) rather than `""`. The resolved concrete `file` (e.g. `process.execPath`) + `plan.args` (`[<fake-cli.mjs>, "--file", …]`) are handed to `launchTerminalAdapter` → `spawnProcess`.
+- **`packages/pty-supervisor/src/index.ts` — `spawnProcess` guard:** if `options.file` is empty/whitespace, throw a clear, descriptive error — `spawnProcess: empty executable for workspace '<id>' (the command could not be resolved to an executable path)` — instead of letting node-pty throw the opaque `File not found: `. Last-line defense for any future caller that fails to resolve.
+
+## Why this is robust on the GH runner
+
+The node path no longer touches PATH: `process.execPath` is the very binary running the worker (absolute, always on disk) — identical to the proven mock path. The two new guards mean an unresolved command either falls back to a best-effort attempt or fails loudly with an actionable message, never as a blank `file`. The generic agents in both host-integration (tRPC `agents.start`) and host-lifecycle now resolve `node`→`process.execPath` and run to `done`.
+
+## Files changed
+- `packages/agent-adapters/src/presets.ts` — `resolveExecutable`: bare `node`/`node.exe` → `process.execPath` (no PATH lookup); detection `undefined`/not_found contract preserved.
+- `apps/host/src/orchestrator.ts` — real-dispatch never passes a blank `file`; falls back to the original command when resolution is empty.
+- `packages/pty-supervisor/src/index.ts` — `spawnProcess` throws a clear error on an empty executable.
+
+## Verification (this Windows host; the GH-runner failure does not reproduce locally — the generic path passes locally either way)
+- `bun run lint` (biome, 138 files) → clean.
+- `bunx turbo run typecheck build test --force` (42 tasks, all packages, cache-disabled) run **2× consecutively → 2/2 full-tree green (42/42 each, 0 fail)**.
+  - `@swarm/agent-adapters` → **39 pass / 0 fail** (both runs).
+  - `@swarm/host` → **12 pass / 0 fail** (both runs) — host-integration (8 assertions incl. `tRPC COMMAND PATH (P03 real dispatch): a 4th agent via the API ran a REAL adapter`) + host-lifecycle (incl. `P03: the API dispatched a REAL generic adapter (not the mock) to done`, P07 setup-before / teardown-after).
+- Banned-token scan (RUBRIC §6.1 pattern, incl. `unimplemented|stub`) over `apps packages docs` → clean (0 matches).
+- Per-package deps only (new code uses Node builtins + `process.execPath`; no new third-party deps). Did not commit/push.
