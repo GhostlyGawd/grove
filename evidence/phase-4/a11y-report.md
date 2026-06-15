@@ -1,5 +1,13 @@
 # Phase-4 Accessibility Report (spec §6.2 — mobile PWA)
 
+> **Post-fix re-audit (2026-06-15): 0 critical / 0 serious; touch targets all ≥44px.** The
+> two blockers found in the first pass were fixed and re-verified (`_a11y.spec.ts` 4/4):
+> (1) the serious `color-contrast` on the sheet/panel section `<h3>` labels — `SectionLabel`
+> in `WorkspaceDetailSheet.tsx` + `SettingsPanel.tsx` and the Notifications "Inbox" heading
+> raised from `text-fg-subtle` → the AA-passing `text-fg-muted`; (2) the Dispatch header
+> button enlarged `min-h-8` → `min-h-11` (44px). The systemic `text-fg-subtle`-on-raised/overlay
+> question remains a Phase-6 token-sweep follow-up. Original findings recorded below.
+
 Automated `axe-core` audit plus touch-target sizing and a keyboard/AT-reachability pass for
 the Grove **mobile PWA** (`apps/mobile`), run against the **real**, paired phone shell (real
 host: `pair.redeem` + tRPC + `/sync` + PTY, no mocks) at a phone viewport. The phone is a

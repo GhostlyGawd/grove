@@ -128,7 +128,7 @@ export function App() {
                   size="sm"
                   variant="primary"
                   icon={<Rocket className="size-3.5" />}
-                  className="min-h-8"
+                  className="min-h-11"
                   onClick={() => setDispatchOpen(true)}
                 >
                   Dispatch
