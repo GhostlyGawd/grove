@@ -1,20 +1,21 @@
-import { createServer } from "node:http";
+import { type IncomingMessage, type Server, createServer } from "node:http";
+import type { Duplex } from "node:stream";
 import type { HostId } from "@swarm/shared";
 import { type RawData, type WebSocket, WebSocketServer } from "ws";
-import type { EventLog } from "./event-log";
+import type { EventLog } from "./event-log.ts";
 import {
   type StoredEvent,
   type SyncFrame,
   decodeResumeToken,
   parseFrame,
   serializeFrame,
-} from "./index";
+} from "./index.ts";
 
 export interface SyncServerOptions {
   readonly log: EventLog;
   /** The host identity clients must present in their resume token. */
   readonly hostId: HostId;
-  /** TCP port; 0 (default) binds an OS-assigned ephemeral port. */
+  /** TCP port; 0 (default) binds an OS-assigned ephemeral port. Ignored when `server` is given. */
   readonly port?: number;
   /** Bind address; defaults to 127.0.0.1 (private-by-default, P11). */
   readonly host?: string;
@@ -24,6 +25,19 @@ export interface SyncServerOptions {
   readonly heartbeatMs?: number;
   /** Max events per BATCH frame during catch-up. Default 512. */
   readonly batchSize?: number;
+  /**
+   * Attach to an existing Node HTTP server in `noServer` mode instead of opening
+   * a dedicated one. The host engine passes its Hono server here so tRPC and the
+   * WS sync hub share a single loopback port (architecture §1). `close()` then
+   * detaches the hub without tearing down the host-owned server.
+   */
+  readonly server?: Server;
+  /**
+   * Gate every WS upgrade. Returning `false` rejects it with a 401 before the
+   * handshake completes — the host wires a bearer-token check here so the sync
+   * channel is as private as the tRPC surface (P11).
+   */
+  readonly authorize?: (req: IncomingMessage) => boolean;
 }
 
 export interface SyncServer {
@@ -63,25 +77,27 @@ function* chunk<T>(items: readonly T[], size: number): Generator<readonly T[]> {
  * token's hostId (mismatch ⇒ RESET), replays missed events as BATCH frames,
  * sends CAUGHT_UP, then streams live EVENT frames as the host appends. Terminal
  * IO is intentionally NOT carried here — it rides an ephemeral topic (spec §4).
+ *
+ * Two modes: standalone (opens its own loopback HTTP server on `port`) or
+ * attached (`server` given) where the host owns the server and the hub handles
+ * upgrades for `path` in `noServer` mode behind an optional `authorize` gate.
  */
 export function createSyncServer(opts: SyncServerOptions): Promise<SyncServer> {
   const host = opts.host ?? DEFAULT_HOST;
   const path = opts.path ?? DEFAULT_PATH;
   const heartbeatMs = opts.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
   const batchSize = opts.batchSize ?? DEFAULT_BATCH_SIZE;
+  const attached = opts.server;
 
   return new Promise((resolve, reject) => {
-    // Own the HTTP server explicitly so close() can forcibly drop lingering
-    // sockets; relying on ws to create+close its own server can hang on a
-    // half-closed connection from an earlier reconnect.
-    const httpServer = createServer();
-    const wss = new WebSocketServer({ server: httpServer, path });
+    // Standalone: own the HTTP server so close() can drop lingering sockets.
+    // Attached: run noServer and route upgrades ourselves so the host keeps
+    // ownership of the (shared) server's lifecycle.
+    const httpServer = attached ?? createServer();
+    const wss = attached
+      ? new WebSocketServer({ noServer: true })
+      : new WebSocketServer({ server: httpServer, path });
     const cursors = new Map<WebSocket, number>();
-
-    const onListenError = (error: Error): void => {
-      reject(error);
-    };
-    httpServer.once("error", onListenError);
 
     wss.on("connection", (socket: WebSocket) => {
       cursors.set(socket, 0);
@@ -181,23 +197,34 @@ export function createSyncServer(opts: SyncServerOptions): Promise<SyncServer> {
       }
     });
 
-    httpServer.listen(opts.port ?? 0, host, () => {
-      httpServer.off("error", onListenError);
+    const resolvedPort = (): number => {
       const address = httpServer.address();
-      const port =
-        typeof address === "object" && address !== null ? address.port : (opts.port ?? 0);
+      return typeof address === "object" && address !== null ? address.port : (opts.port ?? 0);
+    };
 
-      resolve({
+    let upgradeListener: ((req: IncomingMessage, socket: Duplex, head: Buffer) => void) | undefined;
+
+    const buildHandle = (): SyncServer => {
+      const port = resolvedPort();
+      return {
         port,
         url: `ws://${host}:${port}${path}`,
         clientCount: () => wss.clients.size,
         clientCursors: () => Array.from(cursors.values()),
         close: () =>
           new Promise<void>((resolveClose) => {
+            if (upgradeListener && attached) {
+              attached.off("upgrade", upgradeListener);
+            }
             for (const client of wss.clients) {
               client.terminate();
             }
             const finish = (): void => {
+              if (attached) {
+                // The host owns the shared server; only release the hub.
+                resolveClose();
+                return;
+              }
               // Drop any lingering raw sockets so the listener can fully release.
               httpServer.closeAllConnections();
               // Under bun, wss.close() already stops the shared http server, so
@@ -210,7 +237,43 @@ export function createSyncServer(opts: SyncServerOptions): Promise<SyncServer> {
             };
             wss.close(() => finish());
           }),
-      });
+      };
+    };
+
+    if (attached) {
+      upgradeListener = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
+        let pathname = "";
+        try {
+          pathname = new URL(req.url ?? "", "http://localhost").pathname;
+        } catch {
+          pathname = "";
+        }
+        if (pathname !== path) {
+          // Not our path — leave it for any other listener, then ensure no hang.
+          if (attached.listenerCount("upgrade") <= 1) {
+            socket.destroy();
+          }
+          return;
+        }
+        if (opts.authorize && !opts.authorize(req)) {
+          socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+          socket.destroy();
+          return;
+        }
+        wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+      };
+      attached.on("upgrade", upgradeListener);
+      resolve(buildHandle());
+      return;
+    }
+
+    const onListenError = (error: Error): void => {
+      reject(error);
+    };
+    httpServer.once("error", onListenError);
+    httpServer.listen(opts.port ?? 0, host, () => {
+      httpServer.off("error", onListenError);
+      resolve(buildHandle());
     });
   });
 }

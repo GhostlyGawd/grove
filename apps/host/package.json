@@ -10,16 +10,30 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./daemon": {
+      "types": "./src/daemon.ts",
+      "default": "./src/daemon.ts"
     }
   },
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node --packages external",
-    "typecheck": "tsc --noEmit"
+    "build": "bun build ./src/index.ts ./src/daemon.ts --outdir ./dist --target node --packages external",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
+    "@hono/node-server": "^2.0.4",
+    "@hono/trpc-server": "^0.4.2",
+    "@swarm/agent-adapters": "workspace:*",
     "@swarm/api": "workspace:*",
+    "@swarm/core-engine": "workspace:*",
     "@swarm/db": "workspace:*",
+    "@swarm/git-worktree": "workspace:*",
+    "@swarm/pty-supervisor": "workspace:*",
     "@swarm/shared": "workspace:*",
-    "@swarm/sync": "workspace:*"
+    "@swarm/sync": "workspace:*",
+    "@trpc/server": "^11.17.0",
+    "hono": "^4.12.25",
+    "zod": "^4.4.3"
   }
 }

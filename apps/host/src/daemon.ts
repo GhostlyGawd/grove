@@ -1,0 +1,34 @@
+/**
+ * `@swarm/host/daemon` — the heavy, Node-only engine surface: the running HTTP +
+ * tRPC + WS host, the orchestrator (worktrees → PTYs → events), and the
+ * PGlite-backed event-log store. Importing this pulls in node-pty, PGlite and
+ * Hono, so it lives behind a subpath the browser-safe `.` entry never reaches
+ * (the `createHost` handle stays light for thin clients).
+ */
+export { HOST_VERSION } from "./version.ts";
+export {
+  startHost,
+  runDaemon,
+  defaultManifestPath,
+  type StartHostOptions,
+  type RunDaemonOptions,
+  type RunningHost,
+  type HostManifest,
+} from "./server.ts";
+export {
+  Orchestrator,
+  type OrchestratorDeps,
+  type CreateWorkspaceInput,
+  type StartAgentOptions,
+  type PreparedWorkspace,
+  type AgentRun,
+} from "./orchestrator.ts";
+export { PgliteEventLogStore } from "./pglite-event-log-store.ts";
+export {
+  createAppRouter,
+  osName,
+  type AppRouter,
+  type HostContext,
+  type HostServices,
+  type OsName,
+} from "./trpc.ts";

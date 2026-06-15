@@ -7,7 +7,7 @@ import {
   encodeResumeToken,
   parseFrame,
   serializeFrame,
-} from "./index";
+} from "./index.ts";
 
 /** One live connection produced by a {@link SyncTransport}. */
 export interface SyncConnection {
@@ -94,8 +94,10 @@ export class SyncClient {
   private closed = false;
   /** Highest seq durably applied — the resume cursor. */
   private lastSeq: number;
+  private readonly opts: SyncClientOptions;
 
-  constructor(private readonly opts: SyncClientOptions) {
+  constructor(opts: SyncClientOptions) {
+    this.opts = opts;
     this.backoff = { ...DEFAULT_BACKOFF, ...opts.backoff };
     this.topics = opts.topics ?? [];
     this.ackEvery = opts.ackEvery ?? 32;

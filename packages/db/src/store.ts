@@ -19,9 +19,9 @@ import {
   type SessionMode,
   type Workspace,
   type WorkspaceStatus,
-} from "./index";
-import { schema } from "./schema";
-import { events, agentPresets, projects, sessions, syncCursors, workspaces } from "./schema";
+} from "./index.ts";
+import { schema } from "./schema.ts";
+import { events, agentPresets, projects, sessions, syncCursors, workspaces } from "./schema.ts";
 
 /**
  * @swarm/db store/client factory (spec §3.2, ADR-0003). Opens the single source

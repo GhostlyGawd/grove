@@ -1,5 +1,5 @@
 import { type RawData, WebSocket } from "ws";
-import type { SyncConnection, SyncTransport, SyncTransportHandlers } from "./client";
+import type { SyncConnection, SyncTransport, SyncTransportHandlers } from "./client.ts";
 
 function rawToString(data: RawData): string {
   if (Array.isArray(data)) {

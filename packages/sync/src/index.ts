@@ -79,8 +79,8 @@ export function parseFrame(raw: string): SyncFrame {
   throw new Error("sync: malformed frame");
 }
 
-export * from "./event-log-store";
-export * from "./event-log";
-export * from "./client";
+export * from "./event-log-store.ts";
+export * from "./event-log.ts";
+export * from "./client.ts";
 // Node-only surface (`node:http` + `ws`) lives behind `@swarm/sync/server`
 // (see ./server-entry) so this entry stays browser-safe for PWA/neutral bundles.

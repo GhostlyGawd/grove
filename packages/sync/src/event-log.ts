@@ -1,6 +1,6 @@
 import type { DomainEvent } from "@swarm/core-engine";
-import type { EventLogStore } from "./event-log-store";
-import type { StoredEvent } from "./index";
+import type { EventLogStore } from "./event-log-store.ts";
+import type { StoredEvent } from "./index.ts";
 
 /** Notified for every event appended after the listener was registered. */
 export type LiveListener = (event: StoredEvent) => void;
@@ -25,10 +25,13 @@ export interface ResumeHandlers {
  * cursor" (spec §4).
  */
 export class EventLog {
+  private readonly store: EventLogStore;
   private readonly listeners = new Set<LiveListener>();
   private writeChain: Promise<void> = Promise.resolve();
 
-  constructor(private readonly store: EventLogStore) {}
+  constructor(store: EventLogStore) {
+    this.store = store;
+  }
 
   /** Append one event; resolves with its assigned seq once fan-out has run. */
   append(event: DomainEvent): Promise<number> {

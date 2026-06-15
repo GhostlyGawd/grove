@@ -51,3 +51,26 @@ bun test packages/pty-supervisor                  → 4 pass, 0 fail (ran 5x con
 - powershell WORKER_DETAIL after the fix: `childPid=27616 token=true ansi=true childAliveBefore=true rootGone=true childGone=true → PASS` (strong child-existed-and-killed path genuinely exercised, not bypassed).
 - Banned-token scan over both packages' `src/*.ts` (RUBRIC §6.1 pattern) → clean.
 - Did not touch `packages/agent-adapters` (concurrently edited by another agent). Did not run full-repo build/test. Did not commit/push.
+
+---
+
+# Phase 2 — `@swarm/git-worktree` flake under full parallel cold `turbo` (Windows file-lock contention)
+
+**Date:** 2026-06-15 · **Host:** Windows 10 Home build 19045 (x64) · **Toolchain:** Node v24.14.1, Bun 1.3.14 · **Context:** `bun test packages/git-worktree` passed in isolation (9/9), but under a full cold `bunx turbo run typecheck build test --force` — all packages parallel, now including the heavy process-spawning suites (`@swarm/pty-supervisor`, `@swarm/agent-adapters`, and `apps/host`'s `host-integration.test`, which spawns a host + 4 mock agents) — `@swarm/git-worktree` intermittently failed (observed 2/4/6 failing tests across pre-fix runs). **Not a logic bug**: classic transient filesystem contention when many processes hammer the disk at once on Windows (antivirus / git `index.lock` / in-use handles).
+
+**Two compounding manifestations, both addressed:**
+1. **Transient hard failures** in fixture setup (`git init/config/add/commit`) and engine git ops — `Command failed: git add -A` / `git commit -m init|second`, EBUSY/EAGAIN/EPERM/EACCES, `index.lock`/`could not lock`/"being used by another process" / "permission denied".
+2. **Per-test timeouts.** Once hard failures were retried away, the surviving symptom was the bun default **5000 ms** per-test timeout: under peak load a git-heavy test legitimately ran ~8.3 s (slow git spawns + bounded retry backoff), was killed mid-`create`, and the torn-down `expect(b.ok).toBe(true)` reported `false` ("Unhandled error between tests"). The slow path was *correct*, just over the default cliff.
+
+**Fix (root-cause, product-quality — no masking, no coverage cut):**
+- **Engine `src/index.ts`** — `runGit` now wraps `execFileAsync` in a **bounded retry** (max 5 attempts, exponential backoff 50→100→200→400 ms, capped 500 ms). Only *transient* failures retry: a spawn-errno allowlist (`EBUSY/EAGAIN/EACCES/EPERM/ETXTBSY/EMFILE/ENFILE/UNKNOWN`; `ENOENT`=git-not-found is excluded) or a stderr signature of FS contention (`index.lock`, `could not/cannot lock`, `unable to create/write/access/open/read`, `being used by another process`, `the process cannot access the file`, `permission denied`, `resource (temporarily) unavailable`, `operation not permitted`, `device or resource busy`, `bad file descriptor`, `input/output error`). Deterministic git errors (bad ref, branch exists, not-a-worktree) match none of these → surface immediately. After retries are exhausted the **original** failure is surfaced (same `git_failed` shape). Real agents on Windows hit these locks, so the engine itself is now resilient — not just the test.
+- **Fixture `src/index.test.ts`** — the synchronous `git()` helper got the same bounded retry (same attempts/backoff, same transient classifier over errno+stderr+message; backoff uses `Atomics.wait` to block without busy-spin). Contract unchanged: still throws on a non-transient failure, re-throws the original error once exhausted. All 9 tests / 47 `expect()` calls unchanged — coverage preserved.
+- **`package.json`** — test script `bun test` → `bun test --timeout 60000`: generous per-test headroom so the slow-but-correct under-load path never trips the 5 s default. (Same hardening pattern wave-2 used for `pty-supervisor`.)
+
+**Turbo concurrency:** left at default (full parallelism). The retry + timeout headroom made the suite robust *regardless of concurrency* (the preferred outcome), so `turbo.json` was **not** modified — no concurrency cap, no suite marking needed.
+
+**Verification (this Windows host):**
+- `bun test packages/git-worktree` (isolation) → 9 pass, 0 fail, 47 expect().
+- `bun run lint` (biome, root) → clean, 134 files. `bunx turbo run typecheck build test --force` (42 tasks, all packages parallel, cache-disabled) run **4× consecutively → 4/4 full-tree green** (42/42 tasks each; `@swarm/git-worktree` 9 pass / 0 fail every run). Pre-fix the same command failed on the majority of runs; post-fix the flake did not reproduce in 4 cold runs. (Note: `lint` is a root-level `biome check .`, not a turbo task, so it is run separately rather than via `turbo run lint`.)
+- Banned-token scan (RUBRIC §6.1 pattern) over `apps packages docs` → clean; no new banned tokens.
+- Only `packages/git-worktree/{src/index.ts,src/index.test.ts,package.json}` changed. The uncommitted Phase-2 work (apps/host daemon + host-integration test, packages/sync, packages/db, tsconfig.base.json, apps/cli) was left intact and built/typechecked/tested green as part of every cold run. Did not commit/push.

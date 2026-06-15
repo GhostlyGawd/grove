@@ -11,9 +11,60 @@ import { WorktreeEngine } from "./index";
 // is exactly the Windows hazard (`C:\Users\John Doe\...`) the engine must survive.
 const TMP_PREFIX = join(tmpdir(), "grove wt-");
 
+// Bounded retry for fixture git calls. Under a full parallel `turbo run test`
+// (PTY/process-spawning suites hammering the disk at once) these synchronous
+// setup commands (`init`/`add`/`commit`/`config`) intermittently fail on Windows
+// with file-lock / antivirus contention. Retrying a transient failure a few
+// times with a short backoff makes fixture setup robust without masking a real
+// error: deterministic failures match none of the transient signatures and throw
+// at once, and the original error is re-thrown once attempts are exhausted.
+const MAX_GIT_ATTEMPTS = 5;
+const BASE_BACKOFF_MS = 50;
+const MAX_BACKOFF_MS = 500;
+
+/** Signatures (errno or git stderr) of OS-level contention that clears on retry. */
+const TRANSIENT_GIT =
+  /EBUSY|EAGAIN|EACCES|EPERM|ETXTBSY|EMFILE|ENFILE|UNKNOWN|index\.lock|could not lock|cannot lock|unable to (?:create|write|access|open|read)|being used by another process|the process cannot access the file|permission denied|resource (?:temporarily )?unavailable|operation not permitted|device or resource busy|bad file descriptor|input\/output error/i;
+
+function isTransientGitError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const e = error as { code?: unknown; stderr?: unknown; message?: unknown };
+  if (e.code === "ENOENT") {
+    return false; // missing `git`, not transient
+  }
+  const stderr =
+    typeof e.stderr === "string"
+      ? e.stderr
+      : Buffer.isBuffer(e.stderr)
+        ? e.stderr.toString("utf8")
+        : "";
+  const text = [typeof e.code === "string" ? e.code : "", stderr, e.message ?? ""].join("\n");
+  return TRANSIENT_GIT.test(text);
+}
+
+/** Block the calling thread for `ms` without busy-spinning (sync fixture path). */
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 /** Run git synchronously during fixture setup; throws on failure (setup must be sound). */
 function git(cwd: string, ...args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8" });
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_GIT_ATTEMPTS; attempt += 1) {
+    try {
+      return execFileSync("git", args, { cwd, encoding: "utf8" });
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_GIT_ATTEMPTS && isTransientGitError(error)) {
+        sleepSync(Math.min(BASE_BACKOFF_MS * 2 ** (attempt - 1), MAX_BACKOFF_MS));
+        continue;
+      }
+      break;
+    }
+  }
+  throw lastError;
 }
 
 interface Fixture {

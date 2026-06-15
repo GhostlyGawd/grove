@@ -163,28 +163,92 @@ function asExecFailure(error: unknown): ExecFailure {
   return {};
 }
 
-/** Run `git <args>` (optionally inside `cwd`) and return stdout or a typed error. */
-async function runGit(args: readonly string[], cwd?: string): Promise<Result<string, GitError>> {
-  try {
-    const { stdout } = await execFileAsync("git", [...args], {
-      cwd,
-      encoding: "utf8",
-      windowsHide: true,
-      maxBuffer: MAX_BUFFER,
-    });
-    return ok(stdout);
-  } catch (error) {
-    const failure = asExecFailure(error);
-    if (failure.code === "ENOENT") {
-      return err({ code: "git_not_found", message: "git executable not found on PATH" });
-    }
-    const stderr = (failure.stderr ?? "").trim();
-    return err({
-      code: "git_failed",
-      message: stderr || failure.message || "git command failed",
-      stderr,
-    });
+// --- transient-failure retry ------------------------------------------------
+
+/** Up to this many attempts before surfacing the original failure. */
+const MAX_GIT_ATTEMPTS = 5;
+/** First backoff; doubles each attempt up to MAX_BACKOFF_MS. */
+const BASE_BACKOFF_MS = 50;
+const MAX_BACKOFF_MS = 500;
+
+/**
+ * Spawn errnos that mean "the OS was momentarily busy", not "git rejected the
+ * request". Real agents on Windows hit these when antivirus or another process
+ * holds a file handle during a worktree/index write; they clear on a short retry.
+ * ENOENT is deliberately excluded — that is a missing `git`, never transient.
+ */
+const TRANSIENT_SPAWN_CODES = new Set([
+  "EBUSY",
+  "EAGAIN",
+  "EACCES",
+  "EPERM",
+  "ETXTBSY",
+  "EMFILE",
+  "ENFILE",
+  "UNKNOWN",
+]);
+
+/**
+ * Git stderr signatures of filesystem contention (lock files, in-use handles,
+ * permission blips) — i.e. failures that a retry can clear. Deterministic git
+ * errors (bad ref, branch exists, not a worktree) match none of these, so they
+ * surface immediately and are never masked.
+ */
+const TRANSIENT_GIT_STDERR =
+  /index\.lock|could not lock|cannot lock|unable to (?:create|write|access|open|read)|being used by another process|the process cannot access the file|permission denied|resource (?:temporarily )?unavailable|operation not permitted|device or resource busy|bad file descriptor|input\/output error/i;
+
+/** Classify a git failure as transient (worth retrying) vs. deterministic. */
+function isTransientFailure(failure: ExecFailure): boolean {
+  if (typeof failure.code === "string" && TRANSIENT_SPAWN_CODES.has(failure.code)) {
+    return true;
   }
+  return TRANSIENT_GIT_STDERR.test(`${failure.stderr ?? ""}\n${failure.message ?? ""}`);
+}
+
+/** Exponential backoff: 50, 100, 200, 400, capped at MAX_BACKOFF_MS. */
+function backoffDelay(attempt: number): number {
+  return Math.min(BASE_BACKOFF_MS * 2 ** (attempt - 1), MAX_BACKOFF_MS);
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Run `git <args>` (optionally inside `cwd`) and return stdout or a typed error.
+ * Transient OS-level failures (file locks / antivirus contention, common when
+ * many agents hammer the filesystem in parallel on Windows) are retried with a
+ * bounded exponential backoff. Deterministic git errors are returned at once and
+ * the original failure is surfaced once retries are exhausted — nothing is masked.
+ */
+async function runGit(args: readonly string[], cwd?: string): Promise<Result<string, GitError>> {
+  let lastFailure: ExecFailure = {};
+  for (let attempt = 1; attempt <= MAX_GIT_ATTEMPTS; attempt += 1) {
+    try {
+      const { stdout } = await execFileAsync("git", [...args], {
+        cwd,
+        encoding: "utf8",
+        windowsHide: true,
+        maxBuffer: MAX_BUFFER,
+      });
+      return ok(stdout);
+    } catch (error) {
+      const failure = asExecFailure(error);
+      if (failure.code === "ENOENT") {
+        return err({ code: "git_not_found", message: "git executable not found on PATH" });
+      }
+      lastFailure = failure;
+      if (attempt < MAX_GIT_ATTEMPTS && isTransientFailure(failure)) {
+        await sleep(backoffDelay(attempt));
+        continue;
+      }
+      break;
+    }
+  }
+  const stderr = (lastFailure.stderr ?? "").trim();
+  return err({
+    code: "git_failed",
+    message: stderr || lastFailure.message || "git command failed",
+    stderr,
+  });
 }
 
 // --- path helpers -----------------------------------------------------------

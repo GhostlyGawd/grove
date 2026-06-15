@@ -1,0 +1,243 @@
+import { randomBytes } from "node:crypto";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import type { IncomingMessage, Server } from "node:http";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { serve } from "@hono/node-server";
+import { trpcServer } from "@hono/trpc-server";
+import { openStore } from "@swarm/db/store";
+import type { Store } from "@swarm/db/store";
+import { PtySupervisor } from "@swarm/pty-supervisor";
+import { APP_CODENAME, asId } from "@swarm/shared";
+import type { HostId } from "@swarm/shared";
+import { EventLog } from "@swarm/sync";
+import { type SyncServer, createSyncServer } from "@swarm/sync/server";
+import { Hono } from "hono";
+import { Orchestrator } from "./orchestrator.ts";
+import { PgliteEventLogStore } from "./pglite-event-log-store.ts";
+import { type HostServices, createAppRouter, osName } from "./trpc.ts";
+import { HOST_VERSION } from "./version.ts";
+
+const DEFAULT_BIND_HOST = "127.0.0.1";
+const SYNC_PATH = "/sync";
+
+/** On-disk handshake a local client reads to find + authenticate the host. */
+export interface HostManifest {
+  /** Loopback HTTP base, e.g. `http://127.0.0.1:8787`. */
+  readonly endpoint: string;
+  /** Bearer token every API/WS call must present. */
+  readonly token: string;
+  readonly pid: number;
+  readonly startedAt: string;
+}
+
+export interface StartHostOptions {
+  readonly store: Store;
+  readonly eventLog: EventLog;
+  /** Reuse an existing orchestrator (so programmatic + tRPC share one). */
+  readonly orchestrator?: Orchestrator;
+  /** Required when `orchestrator` is omitted — the host builds one over this. */
+  readonly supervisor?: PtySupervisor;
+  readonly hostId?: HostId;
+  /** Bind address; loopback by default for privacy (P11). */
+  readonly host?: string;
+  /** TCP port; 0 (default) binds an OS-assigned ephemeral port. */
+  readonly port?: number;
+  /** Bearer token; a 256-bit random one is generated when omitted. */
+  readonly token?: string;
+  /** Directory for `manifest.json`; defaults to `<homedir>/.grove/host`. */
+  readonly manifestDir?: string;
+  readonly deviceName?: string;
+  readonly owner?: string;
+  /** Base dir for worktrees created via the API; defaults to `~/.grove/worktrees`. */
+  readonly worktreesRoot?: string;
+  /** Sync heartbeat interval (ms); 0 disables. Default 15000. */
+  readonly heartbeatMs?: number;
+}
+
+export interface RunningHost {
+  readonly hostId: HostId;
+  readonly endpoint: string;
+  readonly wsUrl: string;
+  readonly port: number;
+  readonly token: string;
+  readonly manifestPath: string;
+  readonly manifest: HostManifest;
+  readonly orchestrator: Orchestrator;
+  close(): Promise<void>;
+}
+
+/** The canonical manifest location a client looks for (cross-platform). */
+export function defaultManifestPath(): string {
+  return join(homedir(), ".grove", "host", "manifest.json");
+}
+
+/** Constant-time-ish bearer check over a header or `?token=` query (WS upgrades). */
+function authorizeRequest(req: IncomingMessage, token: string): boolean {
+  if (req.headers.authorization === `Bearer ${token}`) {
+    return true;
+  }
+  try {
+    return new URL(req.url ?? "", "http://localhost").searchParams.get("token") === token;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Start the headless host engine: a Hono HTTP server exposing the tRPC surface
+ * under `/trpc`, with the WebSocket sync hub mounted on the SAME loopback port at
+ * `/sync` (architecture §1). Both require a bearer token (P11); the token +
+ * endpoint are written to a manifest so a local client can discover and
+ * authenticate. Runs under Node (the orchestrator drives node-pty, ADR-0007a).
+ */
+export async function startHost(options: StartHostOptions): Promise<RunningHost> {
+  const { store, eventLog } = options;
+  const bindHost = options.host ?? DEFAULT_BIND_HOST;
+  const token = options.token ?? randomBytes(32).toString("base64url");
+  const hostId =
+    options.hostId ??
+    asId<"HostId">(`${APP_CODENAME.toLowerCase()}-${randomBytes(6).toString("hex")}`);
+
+  const orchestrator =
+    options.orchestrator ??
+    (() => {
+      if (!options.supervisor) {
+        throw new Error("startHost requires either `orchestrator` or `supervisor`");
+      }
+      return new Orchestrator({
+        store,
+        eventLog,
+        supervisor: options.supervisor,
+        worktreesRoot: options.worktreesRoot,
+      });
+    })();
+
+  let boundPort = options.port ?? 0;
+  const endpoint = (): string => `http://${bindHost}:${boundPort}`;
+
+  const services: HostServices = {
+    store,
+    eventLog,
+    orchestrator,
+    hostId,
+    version: HOST_VERSION,
+    os: osName(),
+    deviceName: options.deviceName ?? "grove-host",
+    owner: options.owner ?? "",
+    endpoint,
+  };
+
+  const appRouter = createAppRouter();
+  const app = new Hono();
+
+  // Unauthenticated liveness probe (carries no state).
+  app.get("/", (c) => c.json({ ok: true, name: APP_CODENAME, hostId, online: true }));
+
+  // Everything under /trpc requires the bearer token (P11).
+  app.use("/trpc/*", async (c, next) => {
+    if (c.req.header("Authorization") !== `Bearer ${token}`) {
+      return c.json({ error: "unauthorized" }, 401);
+    }
+    return next();
+  });
+  app.use("/trpc/*", trpcServer({ router: appRouter, createContext: () => ({ services }) }));
+
+  // Bind, then learn the ephemeral port.
+  const server = await new Promise<Server>((resolve) => {
+    const srv = serve({ fetch: app.fetch, hostname: bindHost, port: options.port ?? 0 }, (info) => {
+      boundPort = info.port;
+      resolve(srv as unknown as Server);
+    });
+  });
+
+  // Mount the WS sync hub on the host-owned server, gated by the same token.
+  const sync: SyncServer = await createSyncServer({
+    log: eventLog,
+    hostId,
+    host: bindHost,
+    path: SYNC_PATH,
+    heartbeatMs: options.heartbeatMs ?? 15_000,
+    server,
+    authorize: (req) => authorizeRequest(req, token),
+  });
+
+  const resolvedEndpoint = endpoint();
+  const manifestDir = options.manifestDir ?? join(homedir(), ".grove", "host");
+  mkdirSync(manifestDir, { recursive: true });
+  const manifestPath = join(manifestDir, "manifest.json");
+  const manifest: HostManifest = {
+    endpoint: resolvedEndpoint,
+    token,
+    pid: process.pid,
+    startedAt: new Date().toISOString(),
+  };
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  return {
+    hostId,
+    endpoint: resolvedEndpoint,
+    wsUrl: sync.url,
+    port: boundPort,
+    token,
+    manifestPath,
+    manifest,
+    orchestrator,
+    close: async () => {
+      await sync.close();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      try {
+        rmSync(manifestPath, { force: true });
+      } catch {
+        // Manifest may already be gone; cleanup is best-effort.
+      }
+    },
+  };
+}
+
+export interface RunDaemonOptions {
+  /** PGlite/Postgres connection string (ADR-0003); defaults to embedded PGlite. */
+  readonly databaseUrl?: string;
+  /** Explicit PGlite data directory; wins over `databaseUrl`. */
+  readonly dataDir?: string;
+  readonly host?: string;
+  readonly port?: number;
+  readonly token?: string;
+  readonly manifestDir?: string;
+  readonly worktreesRoot?: string;
+  readonly heartbeatMs?: number;
+}
+
+/**
+ * Compose the full daemon from nothing: open the PGlite store, wire the
+ * PGlite-backed event log, a PTY supervisor + orchestrator, then start the host.
+ * This is what `grove host` runs. `close()` also closes the store.
+ */
+export async function runDaemon(options: RunDaemonOptions = {}): Promise<RunningHost> {
+  const store = await openStore({ databaseUrl: options.databaseUrl, dataDir: options.dataDir });
+  const hostId = asId<"HostId">(`${APP_CODENAME.toLowerCase()}-${randomBytes(6).toString("hex")}`);
+  const eventLog = new EventLog(new PgliteEventLogStore(store, hostId));
+  const supervisor = new PtySupervisor();
+
+  const running = await startHost({
+    store,
+    eventLog,
+    supervisor,
+    hostId,
+    host: options.host,
+    port: options.port,
+    token: options.token,
+    manifestDir: options.manifestDir,
+    worktreesRoot: options.worktreesRoot,
+    heartbeatMs: options.heartbeatMs,
+  });
+
+  const baseClose = running.close;
+  return {
+    ...running,
+    close: async () => {
+      await baseClose();
+      await store.close();
+    },
+  };
+}

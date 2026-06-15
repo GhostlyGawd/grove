@@ -23,7 +23,7 @@ import {
   type Session,
   WORKSPACE_STATUSES,
   type Workspace,
-} from "./index";
+} from "./index.ts";
 
 /**
  * @swarm/db — the Drizzle (Postgres dialect) schema (spec §3.2). The same tables

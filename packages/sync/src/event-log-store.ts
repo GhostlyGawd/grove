@@ -1,5 +1,5 @@
 import type { DomainEvent } from "@swarm/core-engine";
-import type { StoredEvent } from "./index";
+import type { StoredEvent } from "./index.ts";
 
 /**
  * Storage port for the append-only event log. `@swarm/db` (built in parallel)
