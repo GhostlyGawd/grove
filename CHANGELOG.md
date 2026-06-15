@@ -6,6 +6,13 @@ this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0
 
 ## [Unreleased]
 
+### Added
+- **Desktop client foundation (Phase 3).** `apps/desktop`: Electron shell (secure preload, `contextIsolation`+`sandbox`, no `nodeIntegration`) + Vite React renderer on `@swarm/ui` — a dark-first operator cockpit (workspace rail, content pane, status bar) with real loading/empty/error/connect states. Connects to the **real** host via `~/.grove/host/manifest.json` (endpoint+token; `GROVE_HOST_URL`/`GROVE_HOST_TOKEN` dev fallback), makes live tRPC `host.status`/`workspaces.list` calls, and subscribes to agent status over the sync WebSocket. Playwright renderer smoke runs against a real host (starts `startHost` + PGlite + PtySupervisor, seeds worktrees).
+
+### Changed
+- `apps/host` serves permissive CORS on `/trpc` (mounted before the bearer guard so preflight isn't 401'd) so browser clients (the desktop renderer + the Phase-4 PWA) can connect — the bearer token, not origin, remains the gate.
+- CI skips the Electron binary download (`ELECTRON_SKIP_BINARY_DOWNLOAD=1`; Electron kept out of bun `trustedDependencies`) — CI only builds/typechecks + Playwright-tests the renderer headlessly; GUI launch is verified locally and packaged in Phase 5. Root `@types/node` pinned via `overrides` to resolve an Electron/`bun-types` version collision.
+
 ## [0.3.0] - 2026-06-15
 
 Phase 2 — cross-platform host engine: worktree isolation, PTY agent supervision, agent adapters (real + a strictly test-gated mock), Drizzle/PGlite persistence, WebSocket event-log sync, and a secure Hono+tRPC host daemon. The parallel-agents integration proof (P01/P02/P04/P10/P11), real `generic` adapter dispatch (P03), and workspace lifecycle (P07) are **green on Windows + macOS + Linux** (CI run 27536255083) — Windows proven by root-cause fixes, not quarantines.

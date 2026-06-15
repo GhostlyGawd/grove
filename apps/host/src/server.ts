@@ -13,6 +13,7 @@ import type { HostId } from "@swarm/shared";
 import { EventLog } from "@swarm/sync";
 import { type SyncServer, createSyncServer } from "@swarm/sync/server";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { Orchestrator } from "./orchestrator.ts";
 import { PgliteEventLogStore } from "./pglite-event-log-store.ts";
 import { type HostServices, createAppRouter, osName } from "./trpc.ts";
@@ -133,6 +134,22 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
 
   // Unauthenticated liveness probe (carries no state).
   app.get("/", (c) => c.json({ ok: true, name: APP_CODENAME, hostId, online: true }));
+
+  // Browser-based clients (the desktop renderer's dev server / file origin, the
+  // mobile PWA) reach the host cross-origin, so the tRPC surface answers CORS
+  // preflight and reflects the allowed methods/headers. This is safe because the
+  // bearer token — not the origin — is the actual gate (P11): a permitted origin
+  // still cannot call anything without the token. Mounted BEFORE the auth guard so
+  // the credential-less OPTIONS preflight is short-circuited here, not 401'd.
+  app.use(
+    "/trpc/*",
+    cors({
+      origin: (origin) => origin ?? "*",
+      allowMethods: ["GET", "POST", "OPTIONS"],
+      allowHeaders: ["Authorization", "Content-Type"],
+      maxAge: 86_400,
+    }),
+  );
 
   // Everything under /trpc requires the bearer token (P11).
   app.use("/trpc/*", async (c, next) => {

@@ -9,6 +9,9 @@
   },
   "workspaces": ["apps/*", "packages/*"],
   "trustedDependencies": ["@homebridge/node-pty-prebuilt-multiarch"],
+  "overrides": {
+    "@types/node": "25.9.3"
+  },
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",

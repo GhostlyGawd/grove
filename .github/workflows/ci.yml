@@ -9,6 +9,14 @@ on:
 permissions:
   contents: read
 
+# Electron is a desktop devDependency. CI only typechecks/builds + Playwright-tests
+# the renderer headlessly and never launches the Electron GUI (that is verified
+# locally + packaged in Phase 5), so skip the ~150MB binary download on every runner.
+# (Bun also blocks untrusted postinstalls by default; this makes the intent explicit
+# and covers any runner where the script would otherwise run.)
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
