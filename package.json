@@ -15,7 +15,7 @@
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "test": "turbo run test --concurrency=2",
     "lint": "biome check .",
     "format": "biome format --write ."
   },
