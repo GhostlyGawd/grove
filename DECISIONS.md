@@ -57,3 +57,9 @@ Format: ID · date · status · context · decision · consequences.
 - **Date:** 2026-06-14 · **Status:** Accepted
 - **Decision:** Phone-only remote path uses `cloudflared` (free) or `localtunnel` (OSS) for the tunnel and **Caddy** for TLS/reverse-proxy. Implemented in Phase 5.
 - **Consequences:** No paid tunneling service required.
+
+## ADR-0010 — Product name: Grove (codename SWARM retired)
+- **Date:** 2026-06-14 · **Status:** Accepted
+- **Context:** Phase 1 must choose the final, shippable product name (spec §6.3 / brief). It has to be original, ownable, easy as a CLI verb, and must not evoke "Superset." The codename **SWARM** is on-message but weakly ownable — it collides with Docker Swarm and Foursquare Swarm and is a generic noun.
+- **Decision:** Ship as **Grove** (CLI: `grove`). A git **worktree** is literally a *tree*; many worktrees branch off one repository and share a single `.git` object store — one root system, many trees, i.e. a grove. The product is where a swarm of agents works that grove. The name is original, ownable, a clean CLI verb, does not evoke Superset, and — unlike a bolted-on label — anchors a coherent design thesis ("mission control for a swarm; calm surface, swarming depth"). "Swarm" is retained as common-noun product vocabulary, not the brand.
+- **Consequences:** `STATE.json.project.final_name = "Grove"`. Brand + identity recorded in `docs/brand/` (name, story, voice, logo + hand-authored SVG mark/wordmark); the full visual system in `docs/design-system.md`; implementation in `packages/ui` (`@swarm/ui` v0.2.0) with the `apps/showcase` proof. The `superset-replica` repo name and Linear project keep their identifiers; only the user-facing product name changes.

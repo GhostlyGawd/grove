@@ -6,6 +6,11 @@ this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0
 
 ## [Unreleased]
 
+### Added
+- **Brand & design system (Phase 1).** Product named **Grove** (ADR-0010). `docs/brand/` (name, story, voice, hand-authored SVG mark + wordmark) and `docs/design-system.md` (thesis "calm surface, swarming depth"; IBM Plex Sans/Mono type scale; dark+light themes; triple-encoded agent-state color semantics; spacing/radii/elevation tokens; motion language + reduced-motion).
+- **`@swarm/ui` primitive component library** (`packages/ui`): tokens (CSS vars + typed TS export) + Tailwind v3.4 preset + accessible React primitives (Button, Input, Select, Panel, Tabs, Badge, AgentStatusDot, Tooltip, Dialog, Sheet, Toast, Table, Spinner, Skeleton, EmptyState, ErrorState, TerminalFrame, DiffView, CodeBlock, ThemeProvider). WCAG-AA contrast enforced in CI via `tokens.test.ts`.
+- **`apps/showcase`** — buildable Vite page rendering all tokens + primitives + empty/loading/error states at desktop and phone widths.
+
 ## [0.1.0] - 2026-06-14
 
 Phase 0 — Recon & Architecture. Skeleton compiles; CI green on Windows + macOS + Linux.

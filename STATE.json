@@ -2,7 +2,7 @@
   "$schema_note": "Canonical pointer to where the build is. Re-derive context from this + blackboard files; do not scroll chat history.",
   "project": {
     "codename": "SWARM",
-    "final_name": null,
+    "final_name": "Grove",
     "tagline": "Orchestrate swarms of CLI coding agents in parallel across isolated git worktrees.",
     "replica_of": "https://github.com/superset-sh/superset",
     "workspace_dir": "D:/GitHub Projects/superset-replica-build",

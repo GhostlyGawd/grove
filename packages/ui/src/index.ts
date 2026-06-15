@@ -1,33 +1,21 @@
-import type { WorkspaceStatus } from "@swarm/db";
-
 /**
- * @swarm/ui — shared design tokens and component prop contracts for the desktop
- * renderer and mobile PWA (spec §2). Status hues are keyed by semantics, never
- * random colors (RUBRIC §6.3). React implementations land with the clients.
+ * @swarm/ui — the Grove design system.
+ *
+ * This entry is intentionally framework-agnostic: tokens, contrast utilities,
+ * status semantics, and the class-name helper. It carries no React, so the
+ * headless engine and other non-renderer packages can depend on the token
+ * contract without pulling in a UI runtime.
+ *
+ * React components live behind the `@swarm/ui/react` subpath; the Tailwind
+ * preset behind `@swarm/ui/tailwind-preset`; the CSS variable layer is
+ * `@swarm/ui/tokens.css` + `@swarm/ui/styles.css`.
+ *
+ * See `docs/design-system.md` for the thesis, type scale, and color rationale.
  */
 
-export const UI_VERSION = "0.1.0";
+export const UI_VERSION = "0.2.0";
 
-/** Spacing scale in px — the dense developer-tool rhythm. */
-export const SPACING = [0, 2, 4, 8, 12, 16, 24, 32] as const;
-
-/** Status color tokens keyed by meaning so state is legible at a glance. */
-export const STATUS_TOKENS: Readonly<Record<WorkspaceStatus, string>> = {
-  idle: "slate",
-  running: "blue",
-  needs_attention: "amber",
-  error: "red",
-  done: "green",
-};
-
-export interface StatusBadgeProps {
-  readonly status: WorkspaceStatus;
-  readonly label?: string;
-}
-
-export interface WorkspaceListItemProps {
-  readonly id: string;
-  readonly name: string;
-  readonly status: WorkspaceStatus;
-  readonly selected: boolean;
-}
+export * from "./cn";
+export * from "./contrast";
+export * from "./status";
+export * from "./tokens";

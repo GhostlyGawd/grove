@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Grove">
+  <title>Grove app mark</title>
+  <desc>One trunk forking into three shoots, each tipped with a node — one repository, many isolated worktrees, an agent in each.</desc>
+  <g fill="none" stroke="#3fb950" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 30 V 17" />
+    <path d="M16 19 L 8.5 11" />
+    <path d="M16 17 L 16 7" />
+    <path d="M16 19 L 23.5 11" />
+  </g>
+  <g fill="#3fb950">
+    <circle cx="8.5" cy="9.6" r="2.3" />
+    <circle cx="16" cy="5.6" r="2.3" />
+    <circle cx="23.5" cy="9.6" r="2.3" />
+  </g>
+</svg>

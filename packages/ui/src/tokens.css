@@ -1,0 +1,252 @@
+/*
+ * Grove design tokens as CSS custom properties.
+ *
+ * The runtime source of truth: Tailwind utilities resolve to these variables,
+ * so theme switching is a `data-theme` attribute swap with no rebuild. Values
+ * mirror `tokens.ts` (which the contrast test enforces against WCAG AA).
+ *
+ * Dark is the default (`:root`). Light is opt-in via `[data-theme="light"]`.
+ * Respect the OS preference when no explicit choice is set.
+ */
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* surfaces */
+  --color-bg-inset: #0a0d0c;
+  --color-bg-base: #0e1211;
+  --color-bg-surface: #141817;
+  --color-bg-raised: #1a201e;
+  --color-bg-overlay: #212826;
+
+  /* lines: subtle/line are decorative separators; strong carries boundaries (≥3:1) */
+  --color-line-subtle: #242c29;
+  --color-line: #313b36;
+  --color-line-strong: #5d685f;
+
+  /* text */
+  --color-fg: #e8edea;
+  --color-fg-muted: #aab4af;
+  --color-fg-subtle: #828d88;
+  --color-fg-on-accent: #06120a;
+
+  /* brand accent — selection, focus, primary action */
+  --color-accent: #3fb950;
+  --color-accent-fg: #57d364;
+  --color-accent-bg: color-mix(in srgb, #3fb950 16%, transparent);
+  --color-accent-border: color-mix(in srgb, #3fb950 42%, transparent);
+
+  /* state: idle */
+  --color-idle: #8b968f;
+  --color-idle-fg: #aab4af;
+  --color-idle-bg: color-mix(in srgb, #8b968f 14%, transparent);
+  --color-idle-border: color-mix(in srgb, #8b968f 34%, transparent);
+
+  /* state: running */
+  --color-running: #2bbecf;
+  --color-running-fg: #5ad6e6;
+  --color-running-bg: color-mix(in srgb, #2bbecf 14%, transparent);
+  --color-running-border: color-mix(in srgb, #2bbecf 40%, transparent);
+
+  /* state: needs attention */
+  --color-attention: #e0a93c;
+  --color-attention-fg: #f2c14e;
+  --color-attention-bg: color-mix(in srgb, #e0a93c 14%, transparent);
+  --color-attention-border: color-mix(in srgb, #e0a93c 42%, transparent);
+
+  /* state: error / diff remove */
+  --color-error: #e5484d;
+  --color-error-fg: #f57579;
+  --color-error-bg: color-mix(in srgb, #e5484d 15%, transparent);
+  --color-error-border: color-mix(in srgb, #e5484d 44%, transparent);
+
+  /* state: success / done / diff add */
+  --color-success: #3fb950;
+  --color-success-fg: #57d364;
+  --color-success-bg: color-mix(in srgb, #3fb950 15%, transparent);
+  --color-success-border: color-mix(in srgb, #3fb950 42%, transparent);
+
+  /* state: info / links-secondary */
+  --color-info: #4c8df6;
+  --color-info-fg: #7aacff;
+  --color-info-bg: color-mix(in srgb, #4c8df6 15%, transparent);
+  --color-info-border: color-mix(in srgb, #4c8df6 44%, transparent);
+
+  /* diff surfaces */
+  --color-diff-add-fg: #57d364;
+  --color-diff-remove-fg: #f57579;
+  --color-diff-add-bg: color-mix(in srgb, #3fb950 13%, transparent);
+  --color-diff-remove-bg: color-mix(in srgb, #e5484d 13%, transparent);
+  --color-diff-add-gutter: color-mix(in srgb, #3fb950 22%, transparent);
+  --color-diff-remove-gutter: color-mix(in srgb, #e5484d 22%, transparent);
+
+  /* elevation */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 6px 18px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 18px 48px rgb(0 0 0 / 0.55);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --color-bg-inset: #eceeed;
+  --color-bg-base: #f4f6f5;
+  --color-bg-surface: #ffffff;
+  --color-bg-raised: #fbfcfb;
+  --color-bg-overlay: #ffffff;
+
+  --color-line-subtle: #e7eae8;
+  --color-line: #d6dcd8;
+  --color-line-strong: #888f89;
+
+  --color-fg: #101714;
+  --color-fg-muted: #515b56;
+  --color-fg-subtle: #677069;
+  --color-fg-on-accent: #ffffff;
+
+  --color-accent: #178035;
+  --color-accent-fg: #157032;
+  --color-accent-bg: color-mix(in srgb, #178035 12%, transparent);
+  --color-accent-border: color-mix(in srgb, #178035 45%, transparent);
+
+  --color-idle: #5d665f;
+  --color-idle-fg: #515b56;
+  --color-idle-bg: color-mix(in srgb, #5d665f 10%, transparent);
+  --color-idle-border: color-mix(in srgb, #5d665f 32%, transparent);
+
+  --color-running: #0e7c8c;
+  --color-running-fg: #0c6675;
+  --color-running-bg: color-mix(in srgb, #0e7c8c 10%, transparent);
+  --color-running-border: color-mix(in srgb, #0e7c8c 40%, transparent);
+
+  --color-attention: #9a6400;
+  --color-attention-fg: #7c5000;
+  --color-attention-bg: color-mix(in srgb, #9a6400 12%, transparent);
+  --color-attention-border: color-mix(in srgb, #9a6400 42%, transparent);
+
+  --color-error: #c5343a;
+  --color-error-fg: #b32a30;
+  --color-error-bg: color-mix(in srgb, #c5343a 10%, transparent);
+  --color-error-border: color-mix(in srgb, #c5343a 42%, transparent);
+
+  --color-success: #1f8c3a;
+  --color-success-fg: #157032;
+  --color-success-bg: color-mix(in srgb, #1f8c3a 11%, transparent);
+  --color-success-border: color-mix(in srgb, #1f8c3a 42%, transparent);
+
+  --color-info: #1d63d8;
+  --color-info-fg: #1450b8;
+  --color-info-bg: color-mix(in srgb, #1d63d8 10%, transparent);
+  --color-info-border: color-mix(in srgb, #1d63d8 42%, transparent);
+
+  --color-diff-add-fg: #157032;
+  --color-diff-remove-fg: #b32a30;
+  --color-diff-add-bg: color-mix(in srgb, #1f8c3a 12%, transparent);
+  --color-diff-remove-bg: color-mix(in srgb, #c5343a 11%, transparent);
+  --color-diff-add-gutter: color-mix(in srgb, #1f8c3a 20%, transparent);
+  --color-diff-remove-gutter: color-mix(in srgb, #c5343a 20%, transparent);
+
+  --shadow-sm: 0 1px 2px rgb(16 23 20 / 0.08);
+  --shadow-md: 0 6px 18px rgb(16 23 20 / 0.1);
+  --shadow-lg: 0 18px 48px rgb(16 23 20 / 0.16);
+}
+
+/* Follow the OS when the app has not set an explicit theme. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+
+    --color-bg-inset: #eceeed;
+    --color-bg-base: #f4f6f5;
+    --color-bg-surface: #ffffff;
+    --color-bg-raised: #fbfcfb;
+    --color-bg-overlay: #ffffff;
+    --color-line-subtle: #e7eae8;
+    --color-line: #d6dcd8;
+    --color-line-strong: #888f89;
+    --color-fg: #101714;
+    --color-fg-muted: #515b56;
+    --color-fg-subtle: #677069;
+    --color-fg-on-accent: #ffffff;
+    --color-accent: #178035;
+    --color-accent-fg: #157032;
+    --color-accent-bg: color-mix(in srgb, #178035 12%, transparent);
+    --color-accent-border: color-mix(in srgb, #178035 45%, transparent);
+    --color-idle: #5d665f;
+    --color-idle-fg: #515b56;
+    --color-running: #0e7c8c;
+    --color-running-fg: #0c6675;
+    --color-attention: #9a6400;
+    --color-attention-fg: #7c5000;
+    --color-error: #c5343a;
+    --color-error-fg: #b32a30;
+    --color-success: #1f8c3a;
+    --color-success-fg: #157032;
+    --color-info: #1d63d8;
+    --color-info-fg: #1450b8;
+    --color-diff-add-fg: #157032;
+    --color-diff-remove-fg: #b32a30;
+    --shadow-sm: 0 1px 2px rgb(16 23 20 / 0.08);
+    --shadow-md: 0 6px 18px rgb(16 23 20 / 0.1);
+    --shadow-lg: 0 18px 48px rgb(16 23 20 / 0.16);
+  }
+}
+
+/* Theme-independent scales. */
+:root {
+  /* typography */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", "Consolas", monospace;
+
+  --text-2xs: 0.6875rem; /* 11px */
+  --text-xs: 0.75rem; /* 12px */
+  --text-sm: 0.8125rem; /* 13px — base UI */
+  --text-base: 0.875rem; /* 14px */
+  --text-lg: 1rem; /* 16px */
+  --text-xl: 1.25rem; /* 20px */
+  --text-2xl: 1.5rem; /* 24px */
+  --text-3xl: 1.875rem; /* 30px */
+
+  --leading-2xs: 1rem;
+  --leading-xs: 1rem;
+  --leading-sm: 1.125rem;
+  --leading-base: 1.25rem;
+  --leading-lg: 1.375rem;
+  --leading-xl: 1.625rem;
+  --leading-2xl: 1.875rem;
+  --leading-3xl: 2.25rem;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* spacing (4px grid) — exposed for CSS consumers; Tailwind mirrors it */
+  --space-px: 1px;
+  --space-0_5: 0.125rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* radii */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* motion */
+  --duration-instant: 80ms;
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 240ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* focus ring */
+  --ring-width: 2px;
+}
