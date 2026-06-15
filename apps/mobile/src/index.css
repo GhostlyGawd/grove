@@ -1,0 +1,29 @@
+@import "@swarm/ui/tokens.css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@swarm/ui/styles.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* The PWA owns the full viewport — a standalone app surface, not a scrolling
+   document. `100dvh` on the shell tracks the dynamic viewport so the bottom nav
+   stays put when mobile browser chrome collapses. */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  /* Paint the safe-area / overscroll gutters with the app background. */
+  background-color: var(--color-bg-base);
+  /* Disable the iOS tap highlight; controls carry their own focus/active state. */
+  -webkit-tap-highlight-color: transparent;
+}

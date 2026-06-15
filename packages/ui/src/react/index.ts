@@ -20,6 +20,8 @@ export { Panel, PanelBody, PanelFooter, PanelHeader, PanelTitle } from "./Panel"
 export type { PanelHeaderProps, PanelProps, PanelTitleProps } from "./Panel";
 export { Tabs } from "./Tabs";
 export type { TabItem, TabsProps } from "./Tabs";
+export { BottomNav } from "./BottomNav";
+export type { BottomNavItem, BottomNavProps } from "./BottomNav";
 export { Badge, StatusBadge } from "./Badge";
 export type { BadgeProps, BadgeTone, StatusBadgeProps } from "./Badge";
 export { AgentStatusDot } from "./AgentStatusDot";
