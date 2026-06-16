@@ -16,8 +16,15 @@
         "impact": "serious",
         "help": "Elements must only use permitted ARIA attributes",
         "helpUrl": "https://dequeuniversity.com/rules/axe/4.12/aria-prohibited-attr?application=axeAPI",
-        "count": 1,
-        "targets": ["span[aria-label=\"Swarm clock\"]"]
+        "count": 6,
+        "targets": [
+          "div[aria-label=\"Agent roster, scrollable\"]",
+          "pre[aria-label=\"Code: .git/worktrees\"]",
+          "div[aria-label=\"Diff: session.ts\"]",
+          "div[aria-label=\"Terminal output\"]",
+          "div[aria-label=\"Diff: DiffView.tsx\"]",
+          "pre[aria-label=\"Code: Windows · shell\"]"
+        ]
       },
       {
         "id": "color-contrast",
@@ -39,7 +46,7 @@
   "meta": {
     "axePath": "D:\\GitHub Projects\\superset-replica-build\\node_modules\\.bun\\axe-core@4.12.1\\node_modules\\axe-core\\axe.js",
     "tags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"],
-    "generatedAt": "2026-06-16T17:10:27.824Z"
+    "generatedAt": "2026-06-16T18:15:43.017Z"
   },
   "desktop.palette": {
     "full": {
@@ -88,8 +95,15 @@
         "impact": "serious",
         "help": "Elements must only use permitted ARIA attributes",
         "helpUrl": "https://dequeuniversity.com/rules/axe/4.12/aria-prohibited-attr?application=axeAPI",
-        "count": 1,
-        "targets": ["span[aria-label=\"Swarm clock\"]"]
+        "count": 6,
+        "targets": [
+          "div[aria-label=\"Agent roster, scrollable\"]",
+          "pre[aria-label=\"Code: .git/worktrees\"]",
+          "div[aria-label=\"Diff: session.ts\"]",
+          "div[aria-label=\"Terminal output\"]",
+          "div[aria-label=\"Diff: DiffView.tsx\"]",
+          "pre[aria-label=\"Code: Windows · shell\"]"
+        ]
       },
       {
         "id": "color-contrast",
@@ -103,7 +117,8 @@
           "text[y=\"80\"]",
           "text[y=\"114\"]",
           "div[aria-label=\"Diff: session.ts\"] > .bg-diff-add-bg.grid-cols-\\[3rem_3rem_1fr\\].grid:nth-child(5) > .whitespace-pre",
-          "div[aria-label=\"Diff: session.ts\"] > .bg-diff-add-bg.grid-cols-\\[3rem_3rem_1fr\\].grid:nth-child(7) > .whitespace-pre"
+          "div[aria-label=\"Diff: session.ts\"] > .bg-diff-add-bg.grid-cols-\\[3rem_3rem_1fr\\].grid:nth-child(7) > .whitespace-pre",
+          ".flex-col > .text-accent-fg"
         ]
       }
     ],

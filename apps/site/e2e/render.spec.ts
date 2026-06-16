@@ -75,7 +75,7 @@ test.describe("Grove launch site renders", () => {
     await expect(page.getByText("isolated", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("img", {
-        name: "One trunk forking into four isolated worktrees, one per agent",
+        name: "Per-worktree isolation: one trunk, 4 isolated worktrees, one per agent",
       }),
     ).toBeVisible();
   });
@@ -85,7 +85,7 @@ test.describe("Grove launch site renders", () => {
     await page.getByText("shared checkout", { exact: true }).click();
     await expect(page.getByText("collision risk", { exact: true })).toBeVisible();
     await expect(
-      page.getByRole("img", { name: "Four agents all branching onto a single shared checkout" }),
+      page.getByRole("img", { name: "Shared checkout: agents contend on one working tree" }),
     ).toBeVisible();
   });
 

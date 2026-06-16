@@ -65,12 +65,16 @@ function ForkVisual({ isolated }: { readonly isolated: boolean }) {
       role="img"
       aria-label={
         isolated
-          ? "One trunk forking into four isolated worktrees, one per agent"
-          : "Four agents all branching onto a single shared checkout"
+          ? `Per-worktree isolation: one trunk, ${FORK_AGENTS.length} isolated worktrees, one per agent`
+          : "Shared checkout: agents contend on one working tree"
       }
     >
       <title>{isolated ? "per-worktree fork" : "shared-checkout collision"}</title>
-      {/* Trunk */}
+      {/* Trunk. Inner shapes + labels are decorative: the <svg role="img"> +
+          aria-label above is the single accessible name for the whole diagram,
+          so the descendants are presentational and explicitly aria-hidden. They
+          stay visually present by design (the labels must read on screen). */}
+      {/* biome-ignore lint/a11y/noAriaHiddenOnFocusable: SVG <line> is non-interactive and not focusable; aria-hidden marks it decorative under the role=img name */}
       <line
         x1={trunkX}
         y1={top - 6}
@@ -79,12 +83,14 @@ function ForkVisual({ isolated }: { readonly isolated: boolean }) {
         stroke="var(--color-accent-fg)"
         strokeWidth={1.6}
         strokeLinecap="round"
+        aria-hidden="true"
       />
       {FORK_AGENTS.map((agent, i) => {
         const y = top + i * rowH;
         const nodeY = isolated ? y : sharedNodeY;
         return (
-          <g key={agent.id}>
+          // biome-ignore lint/a11y/noAriaHiddenOnFocusable: SVG <g> is non-interactive and not focusable; hides the decorative shoot+label under the role=img name
+          <g key={agent.id} aria-hidden="true">
             {/* shoot from trunk out to the node */}
             <path
               d={`M ${trunkX} ${y} L ${branchX} ${y} L ${tipX - 12} ${nodeY}`}
@@ -110,7 +116,8 @@ function ForkVisual({ isolated }: { readonly isolated: boolean }) {
       })}
       {/* shared collision node (only in shared mode) — one checkout, contended */}
       {isolated ? null : (
-        <>
+        // biome-ignore lint/a11y/noAriaHiddenOnFocusable: SVG <g> is non-interactive and not focusable; hides the decorative collision node under the role=img name
+        <g aria-hidden="true">
           <circle
             cx={tipX}
             cy={sharedNodeY}
@@ -127,7 +134,7 @@ function ForkVisual({ isolated }: { readonly isolated: boolean }) {
           >
             one checkout
           </text>
-        </>
+        </g>
       )}
     </svg>
   );

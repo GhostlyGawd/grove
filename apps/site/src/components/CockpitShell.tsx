@@ -141,7 +141,9 @@ function StatusStrip() {
           </span>
         ) : null}
         <span className="ml-auto flex shrink-0 items-center gap-3 tabular-nums">
-          <span aria-label="Swarm clock">{clock}</span>
+          <span role="timer" aria-label="Swarm clock">
+            {clock}
+          </span>
           <ScrollChevron />
         </span>
       </div>
