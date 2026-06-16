@@ -82,7 +82,7 @@ async function globalSetup(): Promise<void> {
 
   const store = await openStore({ dataDir });
   const project = await store.createProject({
-    name: "superset-replica",
+    name: "grove-web",
     localPath: join(dataDir, "repo"),
     defaultBranch: "main",
   });
