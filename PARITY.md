@@ -3,6 +3,8 @@
 Every item must end the run as ✅ **verified by evidence** (`evidence/<phase>/`).
 Status legend: ☐ not started · ◐ in progress · ✅ verified.
 
+**ALL 14 PARITY ITEMS ✅ — v1.0.0 shipped 2026-06-16** (3-OS CI run 27626509741 GREEN; independent Phase-6 Critic ALL-PASS). See `HANDOFF.md`.
+
 ## Core capability parity (1:1 with Superset)
 - ✅ **P01 Parallel execution** — many CLI coding agents run at once on one host. _Phase 2; green 3-OS CI run 27536255083 + Critic review-3 PASS; evidence/phase-2._
 - ✅ **P02 Worktree isolation** — each task gets its own branch + working dir; agents never interfere. _Phase 2 (ISOLATION integration test); evidence/phase-2._
@@ -31,3 +33,6 @@ Status legend: ☐ not started · ◐ in progress · ✅ verified.
 | P05, P06 | `evidence/phase-3/` (content.spec e2e, terminal/diff screenshots) · `review.md` ALL-PASS | ✅ v0.4.0 (CI 27550630185) |
 | P08, P09 | `evidence/phase-3/` (b2.spec e2e, b2-* screenshots, settings-projects host tests) · `review.md` ALL-PASS | ✅ v0.4.0 (CI 27550630185) |
 | — perf/a11y | `evidence/phase-3/perf-report.md` · `a11y-report.md` (axe 0 critical/serious) | desktop-scope ✅ |
+| P12 mobile control | `evidence/phase-4/` (e2e mobile, 8 screenshots, perf+a11y) · `review.md` ALL-PASS | ✅ v0.5.0 (CI 27567194903) |
+| P13, P14 setup+native | `evidence/phase-5/` (installers.md, secure-context.*, remote-pairing.md, packaged-launch) · `review.md` ALL-PASS | ✅ v0.6.0 (CI 27579893046) |
+| Phase-6 launch (v1.0.0) | `evidence/phase-6/` — a11y-report (axe 0/0 desktop+mobile) · perf-report (Linux budgets PASS) · license-audit (OSS-only) · security-review (no High/Critical) · ci-green (27626509741) · `review.md` ALL-PASS | ✅ v1.0.0 |

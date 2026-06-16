@@ -23,10 +23,10 @@
     "3_desktop_client": "done (v0.4.0; CI run 27550630185 GREEN 3 OSes [verify matrix] + e2e (desktop) job; independent Critic ALL-PASS incl §6.3; axe a11y 0 critical/serious; perf budgets recorded; P05/P06/P08/P09 = Done. Billing unblocked by making repo public — ADR-0012.)",
     "4_mobile_client": "done (v0.5.0; CI run 27567194903 GREEN 3 OSes [verify] + e2e (desktop) + e2e (mobile); independent Phase-4 Critic ALL-PASS incl §6.3; axe a11y 0 critical/serious; phone perf budgets PASS; P12 done. PWA pairing [QR single-use code -> bearer in IndexedDB], read journeys, touch terminal+dispatch, offline SW + Web Push/VAPID. On-device push lights up at the Phase-5 secure origin.)",
     "5_platform_setup": "done (v0.6.0; CI run 27579893046 GREEN — verify x3 + e2e desktop+mobile + new package x3 [electron-builder --dir cold on all 3 OS]; independent Phase-5 Critic ALL-PASS. grove up/start/stop/status lifecycle (P13); cloudflared remote tunnel-URL pairing -> on-device SW+push (Caddy-TLS secure-context proof); electron-builder NSIS/dmg/AppImage; real 97.6MB NSIS installer + packaged GUI launch evidence (P14). Linear P13/P14 Done.)",
-    "6_hardening_launch": "in_progress (launch-hardening: a11y source fixes in @swarm/ui + license-audit + cross-platform perf re-measure + security review + docs + HANDOFF -> v1.0.0; opened 2026-06-16, ADR-0018)"
+    "6_hardening_launch": "done (v1.0.0 — the FINAL release; CI run 27626509741 GREEN 3 OSes [verify x3 + e2e desktop + e2e mobile + package x3]; independent Phase-6 Critic ALL-PASS [evidence/phase-6/review.md]. a11y SOURCE fixes in @swarm/ui [token AA on raised+overlay, Dialog/Sheet closed=display:none, TerminalFrame showFind/showSplit; axe 0/0 desktop+mobile, CI 27623871151] + license-audit [OSS-only, 0 GPL/proprietary] + cross-platform perf [Linux budgets PASS; terminal-stream p95 611ms Windows -> 43ms Linux] + security review [no High/Critical] + docs + MIT LICENSE + real grove bin + HANDOFF.md. All 14 parity P01-P14 shipped. ADR-0018/0019.)"
   },
-  "version": "0.6.0",
-  "next_release_target": "1.0.0",
+  "version": "1.0.0",
+  "next_release_target": "shipped — v1.0.0 is the FINAL release (all §9 exit conditions met with evidence)",
   "toolchain": {
     "git": "2.53.0", "gh": "2.89.0 (authed: GhostlyGawd)", "node": "24.14.1",
     "npm": "11.11.0", "bun": "installed", "pnpm": "installed",
@@ -49,10 +49,8 @@
     "tunnel": "cloudflared / localtunnel (OSS) — Phase 5"
   },
   "next_actions": [
-    "[ACTIVE — Phase 6 / launch-hardening, ADR-0018] Wave 1: a11y SOURCE fixes in @swarm/ui — (a) lighten dark `fgSubtle` so text-fg-subtle holds AA 4.5 on raised+overlay (verified failing today: #828d88 on overlay #212826 = 4.38:1) and extend packages/ui/src/tokens.test.ts to assert fg-subtle on raised+overlay both themes; mirror the hex in tokens.css; (b) Dialog/Sheet must be display:none when not [open] at the source (emit `flex` only while open) so the closed-overlay full-bleed quirk dies — removes the per-consumer conditional-mount workaround; (c) TerminalFrame prop to hide the inert mobile Find/Split buttons. Re-run axe desktop+mobile -> evidence/phase-6/a11y-report.md.",
-    "[Phase 6] Wave 2 evidence: license-audit (whole-product, ADR-0008) -> evidence/phase-6/license-audit.md (OSS-only proof); CROSS-PLATFORM perf re-measure (Phase-3 terminal-stream p95 tail was interactive-Windows-PowerShell variance; re-measure on Linux/macOS, CI-measured numbers preferred) -> evidence/phase-6/perf-report.md with speed budgets met; security review -> evidence/phase-6/security-review.md.",
-    "[Phase 6] Wave 3 docs: README + getting-started (incl the phone-only path) + docs/demo.md; then HANDOFF.md.",
-    "[Phase 6] Gate + sign-off: clean-install cold gate -> push -> confirm 3-OS CI green (verify x3 + e2e desktop + e2e mobile + package x3) -> evidence/phase-6/ci-green.md; independent Phase-6 Critic (did NOT build) writes evidence/phase-6/review.md per §6.1/§6.3/§6.4; on ALL-PASS cut v1.0.0 (the FINAL release) + write HANDOFF.md.",
+    "[v1.0.0 SHIPPED 2026-06-16 — PROJECT COMPLETE] Phase 6 done: a11y SOURCE fixes (CI 27623871151) + license-audit (OSS-only) + cross-platform perf (Linux budgets PASS) + security review (no High/Critical) + docs + MIT LICENSE + real grove bin; independent Phase-6 Critic ALL-PASS (evidence/phase-6/review.md); v1.0.0 cut on CI 27626509741 (GREEN 3 OSes) + tag v1.0.0 + HANDOFF.md. All 14 parity items P01-P14 shipped across v0.1.0-v1.0.0. See HANDOFF.md.",
+    "[post-1.0 backlog, optional] publish a `grove` bin to a registry (npx grove); acquire a code-signing cert (unsigned installers); bump dev-only esbuild advisories; macOS perf datapoint to complement the Linux re-measure.",
     "[harness retro follow-up, at a clean boundary] route the CI-gate lessons (turbo-cache false-green -> --force; --force != CI -> clean-install gate; gate the test step at DEFAULT-or-capped concurrency not --concurrency=1; billing-misdiagnosis rule; re-gate AFTER adding evidence/QA specs) into recursive-harness artifacts via /retro -> /harness-pr"
   ],
   "critic_followups_for_phase2": [

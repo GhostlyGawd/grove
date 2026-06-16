@@ -6,6 +6,22 @@ this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-16
+
+Phase 6 — Hardening & launch. **The 1.0 release.** All 14 parity items (P01–P14) ship across v0.1.0–v1.0.0. **Green on Windows + macOS + Linux** — CI run 27626509741: the `verify` matrix (lint/typecheck/build/test) + the real-host desktop & mobile `e2e` jobs + the 3-OS `package` job, all green (Windows included). Independent Phase-6 Critic **ALL-PASS** (`evidence/phase-6/review.md`), grading §6.1 DoD / §6.2 evidence / §6.3 anti-slop / §6.4 quality from the artifacts.
+
+### Added
+- **MIT license + a real `grove` command.** A root `LICENSE` (MIT) properly licenses the OSS-only stack (ADR-0008). `@swarm/cli` gains a `bin` (`grove`) + shebang so `grove <verb>` is a real command (via `bun link`, or from the repo) — not just product vocabulary.
+- **Cross-platform performance evidence (§6.4).** A CI step runs the desktop `_perf.spec.ts` against the **real** host on Linux; `evidence/phase-6/perf-report.md` records the cross-platform re-measure — **all four speed budgets PASS on Linux** (cold start 200/247 ms, dialog-open 53/66 ms, workspace-switch 18/23 ms, terminal-stream **33/43 ms**). This retires the Phase-3 Windows-PowerShell terminal-stream tail (611 ms p95 → 43 ms on Linux/bash): the tail was the interactive host shell, not Grove's transport.
+- **Launch sign-off evidence (`evidence/phase-6/`).** `license-audit.md` (693 deps audited, OSS-only — 566 MIT / 49 ISC / 20 Apache-2.0 / …, **zero** GPL/AGPL/proprietary), `security-review.md` (10 areas, **no High/Critical**, residuals accepted), `ci-green.md`, `a11y-report.md`, and the independent Critic `review.md`.
+- **Docs.** A real product `README.md`, `docs/getting-started.md` (incl. the phone-only remote path), and `docs/demo.md` (a guided walkthrough of all 14 parity items + the desktop/mobile/remote paths).
+
+### Fixed
+- **Systemic `@swarm/ui` accessibility, fixed at the source (not per-consumer).** Dark `text-fg-subtle` (`#828d88` → `#8b958f`) now holds WCAG AA on **raised + overlay** surfaces (verified failing before: 4.38:1 on overlay; now 4.87), with `tokens.test.ts` extended to enforce `fg-subtle on raised`/`overlay` for both themes — so the per-consumer `text-fg-subtle → text-fg-muted` dodges from Phase 3/4 are **reverted** back to the intended weight. `Dialog`/`Sheet` are now `display:none` when closed (`open ? "flex" : "hidden"` + `useLayoutEffect`), killing the closed-overlay full-bleed quirk that every consumer had worked around by conditional-mount. `TerminalFrame` gained `showFind`/`showSplit` props so the mobile terminal no longer renders inert Find/Split buttons. Re-audit: axe-core **0 critical / 0 serious** on desktop + mobile.
+
+### Notes
+- Honest residuals (documented + accepted, non-blocking — see `evidence/phase-6/security-review.md` / `license-audit.md`): default-permissive CORS + WS bearer-in-`?token=` (the 256-bit bearer is the gate; loopback default); unsigned installers (SmartScreen/Gatekeeper disclosed); `web-push` is MPL-2.0 (weak copyleft, used unmodified as a library); the default remote tunnel uses Cloudflare's free TryCloudflare service (the localtunnel MIT fallback keeps the remote path fully OSS).
+
 ## [0.6.0] - 2026-06-15
 
 Phase 5 — Platform & self/remote setup (P13) + packaged native apps (P14). **Green on Windows + macOS + Linux** — CI run 27579893046: the `verify` matrix + the desktop & mobile e2e jobs **plus** a new 3-OS **`package`** job that runs `electron-builder --dir` cold to validate the desktop packaging config. Independent Phase-5 Critic **ALL-PASS**.
